@@ -26,7 +26,13 @@ let selectedFinancierIds = new Set();    // for apply-financing modal
 let currentBuyerTab      = "suppliers"; // active buyer tab
 let currentSupplierTab   = "requests";  // active supplier tab
 let pendingInvoiceOrderId = null;        // linked PO when generating invoice from order
-let purchaseOrders       = [
+let workspaceSearchQuery = "";
+let lastBuyerPending     = [];
+let lastBuyerApproved    = [];
+let lastBuyerBorrowed    = [];
+const SESSION_KEY        = "scf_nexus_session";
+const THEME_KEY          = "scf_nexus_theme";
+const SEED_PURCHASE_ORDERS = [
     {
         id: 101,
         ref: "PO-2026-901",
@@ -54,6 +60,7 @@ let purchaseOrders       = [
         createdAt: "2026-08-15T14:30:00Z"
     }
 ];
+let purchaseOrders       = SEED_PURCHASE_ORDERS.map(po => ({ ...po }));
 let suppliersList        = [];          // dynamically fetched suppliers
 let financiersList       = [];          // dynamically fetched financiers
 let buyersList           = [];          // dynamically fetched buyers
@@ -85,7 +92,14 @@ const FALLBACK_FINANCIERS = [
 // =====================================================================
 document.addEventListener("DOMContentLoaded", () => {
     console.log("SCF Nexus Initializing…");
-    showLoginScreen();
+    applySavedTheme();
+    const restored = restoreSession();
+    if (restored) {
+        showDashboard();
+        initDashboard();
+    } else {
+        showLoginScreen();
+    }
 });
 
 // =====================================================================
@@ -144,6 +158,168 @@ function fillDemoCredentials() {
     }
 }
 
+async function quickDemoLogin(role) {
+    setLoginRole(role);
+    fillDemoCredentials();
+    const form = document.getElementById("form-login");
+    if (form) form.requestSubmit();
+}
+
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    if (btn) btn.innerHTML = show ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
+}
+
+function persistSession() {
+    try {
+        const remember = document.getElementById("pref-remember");
+        if (remember && !remember.checked) {
+            localStorage.removeItem(SESSION_KEY);
+            return;
+        }
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+            token: authToken,
+            user: currentUser,
+            role: currentRole
+        }));
+    } catch (e) { /* ignore quota */ }
+}
+
+function restoreSession() {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data.token || !data.user) return false;
+        authToken = data.token;
+        currentUser = data.user;
+        currentRole = data.role || data.user.role || "supplier";
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+}
+
+function applySavedTheme() {
+    const theme = localStorage.getItem(THEME_KEY) || "light";
+    document.documentElement.setAttribute("data-theme", theme);
+}
+
+function matchesSearch(...parts) {
+    if (!workspaceSearchQuery) return true;
+    const hay = parts.filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(workspaceSearchQuery);
+}
+
+function onWorkspaceSearch(value) {
+    workspaceSearchQuery = (value || "").trim().toLowerCase();
+    rerenderVisibleLists();
+}
+
+function rerenderVisibleLists() {
+    renderSupplierBuyerRequests();
+    renderSupplierInvoicesList();
+    renderSupplierFinancingInvoices();
+    renderSupplierFinanciersGrid();
+    renderBuyerSuppliersGrid();
+    renderBuyerPOs();
+    if (typeof lastBuyerPending !== "undefined") {
+        renderBuyerPendingRequests(lastBuyerPending);
+        renderBuyerApprovedInvoices(lastBuyerApproved);
+        renderBuyerBorrowedInvoices(lastBuyerBorrowed);
+    }
+    if (typeof financierInvoicesCache !== "undefined") renderFinancierInvoicesFeed();
+    updateActionQueue();
+}
+
+function toggleMobileNav() {
+    const drawer = document.getElementById("mobile-nav-drawer");
+    if (!drawer) return;
+    drawer.hidden = !drawer.hidden;
+}
+
+function focusDemoWorkspaces() {
+    closeUserDropdown();
+    const nav = document.getElementById("demo-workspace-nav");
+    if (nav) {
+        nav.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        showToast("Use Demo tabs to tour Supplier, Buyer, Financier, and Admin.", "info");
+    }
+    const drawer = document.getElementById("mobile-nav-drawer");
+    if (drawer && window.innerWidth <= 900) drawer.hidden = false;
+}
+
+function pipelineStepFromStatus(status) {
+    switch (status) {
+        case "PENDING_VERIFICATION": return 3;
+        case "VERIFIED": return 4;
+        case "OFFER_EXTENDED": return 6;
+        case "FINANCED": return 7;
+        case "SETTLED": return 7;
+        case "DISPUTED":
+        case "REJECTED": return 3;
+        default: return purchaseOrders.length ? 2 : 1;
+    }
+}
+
+function updateLifecycleBanner() {
+    let step = 1;
+    if (selectedInvoice) step = pipelineStepFromStatus(selectedInvoice.status);
+    else if (invoicesData.length) {
+        const order = ["SETTLED", "FINANCED", "OFFER_EXTENDED", "VERIFIED", "PENDING_VERIFICATION"];
+        const top = order.map(s => invoicesData.find(i => i.status === s)).find(Boolean);
+        step = top ? pipelineStepFromStatus(top.status) : 2;
+    } else if (purchaseOrders.length) step = 2;
+
+    document.querySelectorAll("#lifecycle-banner .step-pill").forEach(pill => {
+        const n = parseInt(pill.dataset.step, 10);
+        pill.classList.toggle("active", n === step);
+        pill.classList.toggle("done", n < step);
+    });
+}
+
+function updateActionQueue() {
+    const box = document.getElementById("action-queue");
+    if (!box) return;
+    const cards = [];
+    const pendingPO = purchaseOrders.filter(p => p.status !== "INVOICE_GENERATED");
+    const pendingInv = invoicesData.filter(i => i.status === "PENDING_VERIFICATION");
+    const verified = invoicesData.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED");
+    const financed = invoicesData.filter(i => i.status === "FINANCED");
+
+    if (currentRole === "supplier") {
+        if (pendingPO.length) cards.push({ kind: "urgent", icon: "fa-cart-arrow-down", title: `${pendingPO.length} buyer order${pendingPO.length === 1 ? "" : "s"} waiting`, body: "Generate an invoice so the buyer can verify goods and you can raise finance.", go: "Open orders", run: "switchSupplierTab('requests')" });
+        if (pendingInv.length) cards.push({ kind: "info", icon: "fa-clock", title: `${pendingInv.length} invoice${pendingInv.length === 1 ? "" : "s"} with the buyer`, body: "Verification is in progress. Track status in Invoices.", go: "Track invoices", run: "switchSupplierTab('invoices')" });
+        if (verified.length) cards.push({ kind: "ready", icon: "fa-hand-holding-dollar", title: `${verified.length} ready to finance`, body: "Buyer approved. Apply to financiers and accept the AI best match.", go: "Apply now", run: "switchSupplierTab('financing')" });
+        if (!cards.length) cards.push({ kind: "info", icon: "fa-plus", title: "Submit your first invoice", body: "Upload a verified receivable to start matching liquidity.", go: "New invoice", run: "openModal('modal-create-invoice')" });
+    } else if (currentRole === "buyer") {
+        if (pendingInv.length) cards.push({ kind: "urgent", icon: "fa-shield-halved", title: `${pendingInv.length} invoice${pendingInv.length === 1 ? "" : "s"} need your sign-off`, body: "Confirm receipt so suppliers can unlock working capital.", go: "Verify now", run: "switchBuyerTab('requests')" });
+        if (financed.length) cards.push({ kind: "info", icon: "fa-calendar-check", title: `${financed.length} financed obligation${financed.length === 1 ? "" : "s"}`, body: "Settle on maturity so the financier is repaid.", go: "View settlements", run: "switchBuyerTab('borrowed')" });
+        cards.push({ kind: "ready", icon: "fa-boxes-stacked", title: "Need parts from a supplier?", body: "Place a component request. The supplier invoices you after delivery.", go: "Request components", run: "openComponentRequestModal()" });
+    } else if (currentRole === "financier") {
+        if (verified.length) cards.push({ kind: "ready", icon: "fa-file-invoice-dollar", title: `${verified.length} verified invoice${verified.length === 1 ? "" : "s"} in market`, body: "Price risk, set APR, and bid from the offer desk.", go: "Open book", run: "setFinancierStatusFilter('VERIFIED')" });
+        cards.push({ kind: "info", icon: "fa-filter", title: "Filter by supplier", body: "Underwrite one name at a time using the supplier strip above the book.", go: "All invoices", run: "setFinancierStatusFilter('ALL')" });
+    } else {
+        cards.push({ kind: "info", icon: "fa-database", title: "Marketplace monitor", body: "Refresh the audit ledger after financing and settlement events.", go: "Refresh ledger", run: "loadAdminAuditLedger()" });
+    }
+
+    box.hidden = cards.length === 0;
+    box.innerHTML = cards.map(c => `
+        <div class="action-card ${c.kind}" onclick="${c.run}">
+            <h4><i class="fa-solid ${c.icon}"></i> ${c.title}</h4>
+            <p>${c.body}</p>
+            <span class="action-go">${c.go} →</span>
+        </div>
+    `).join("");
+}
+
 async function handleLogin(event) {
     event.preventDefault();
     const email    = document.getElementById("login-email").value;
@@ -166,6 +342,7 @@ async function handleLogin(event) {
         authToken   = data.access_token;
         currentUser = data.user;
         currentRole = currentUser.role || loginRole;
+        persistSession();
 
         showToast(`Welcome back, ${currentUser.full_name}!`, "success");
         showDashboard();
@@ -350,13 +527,10 @@ function openSettingsModal() {
 }
 
 function toggleThemeMode(mode) {
-    if (mode === "light") {
-        document.body.classList.add("light-mode");
-        showToast("Switched to Clean Light Theme Mode", "info");
-    } else {
-        document.body.classList.remove("light-mode");
-        showToast("Switched to Dark Glassmorphism Theme Mode", "info");
-    }
+    const theme = mode === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+    showToast(theme === "light" ? "Light theme on" : "Dark theme on", "info");
 }
 
 function saveSettings() {
@@ -408,6 +582,7 @@ async function loginAsRole(role) {
         const data = await res.json();
         authToken   = data.access_token;
         currentUser = data.user;
+        persistSession();
         updateUserMenuInfo();
         await loadRoleData();
     } catch (err) {
@@ -421,6 +596,8 @@ async function loadRoleData() {
     else if (currentRole === "buyer")     { await loadBuyerDashboardData(); }
     else if (currentRole === "financier") { await loadFinancierMatchedFeed(); }
     else if (currentRole === "admin")     { await loadAdminAuditLedger(); }
+    updateActionQueue();
+    updateLifecycleBanner();
 }
 
 async function refreshStats() {
@@ -512,6 +689,8 @@ async function loadSupplierDashboardData() {
         renderSupplierFinancingInvoices();
         renderSupplierFinanciersGrid();
         populateDownloadSelect();
+        updateActionQueue();
+        updateLifecycleBanner();
 
         if (invoicesData.length > 0 && !selectedInvoice) {
             selectSupplierInvoice(invoicesData[0].id);
@@ -530,7 +709,9 @@ function renderSupplierBuyerRequests() {
 
     if (badge) badge.textContent = `${purchaseOrders.length} Request${purchaseOrders.length === 1 ? '' : 's'}`;
 
-    if (purchaseOrders.length === 0) {
+    const visibleOrders = purchaseOrders.filter(po => matchesSearch(po.ref, po.supplierName, po.component, po.status, po.notes));
+
+    if (visibleOrders.length === 0) {
         container.innerHTML = `
             <div class="empty-state" style="grid-column: 1 / -1;">
                 <i class="fa-solid fa-cart-arrow-down fa-2x"></i>
@@ -540,7 +721,7 @@ function renderSupplierBuyerRequests() {
         return;
     }
 
-    container.innerHTML = purchaseOrders.map(po => {
+    container.innerHTML = visibleOrders.map(po => {
         const isInvoiced = po.status === "INVOICE_GENERATED";
         return `
             <div class="glass-panel" style="padding:16px;border-left:4px solid ${isInvoiced ? 'var(--accent-emerald)' : 'var(--accent-indigo)'};">
@@ -619,12 +800,14 @@ function renderSupplierInvoicesList() {
 
     if (countBadge) countBadge.textContent = `${invoicesData.length} Invoices`;
 
-    if (invoicesData.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-file-invoice fa-2x"></i><p>No invoices submitted yet.</p></div>`;
+    const visibleInvoices = invoicesData.filter(inv => matchesSearch(inv.invoice_number, inv.buyer_company_name, inv.status, inv.amount));
+
+    if (visibleInvoices.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-file-invoice fa-2x"></i><p>${workspaceSearchQuery ? "No invoices match your search." : "No invoices submitted yet."}</p></div>`;
         return;
     }
 
-    container.innerHTML = invoicesData.map(inv => {
+    container.innerHTML = visibleInvoices.map(inv => {
         const isSelected = selectedInvoice && selectedInvoice.id === inv.id;
         let verifHtml = '';
         if (inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED') {
@@ -1209,15 +1392,17 @@ async function submitFinancingApplications() {
 // =====================================================================
 function renderBuyerPOs() {
     const container = document.getElementById("buyer-po-list");
-    const badge     = document.getElementById("po-count-badge");
-    badge.textContent = `${purchaseOrders.length} POs`;
+    if (!container) return;
+    const badge = document.getElementById("po-count-badge");
+    const list = purchaseOrders.filter(po => matchesSearch(po.ref, po.supplierName, po.component, po.status));
+    if (badge) badge.textContent = `${purchaseOrders.length} POs`;
 
-    if (purchaseOrders.length === 0) {
-        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-boxes-stacked fa-2x"></i><p>No purchase orders placed yet.</p></div>`;
+    if (list.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-boxes-stacked fa-2x"></i><p>${workspaceSearchQuery ? "No orders match your search." : "No purchase orders placed yet."}</p></div>`;
         return;
     }
 
-    container.innerHTML = purchaseOrders.map(po => `
+    container.innerHTML = list.map(po => `
         <div class="invoice-card">
             <div class="inv-card-header">
                 <span class="inv-num">${po.ref || 'PO-' + po.id}</span>
@@ -1255,7 +1440,13 @@ function renderBuyerSuppliersGrid() {
         return;
     }
 
-    container.innerHTML = suppliersList.map(sup => `
+    const visibleSuppliers = suppliersList.filter(sup => matchesSearch(sup.name, sup.company_name, sup.sector, sup.tax_id));
+    if (visibleSuppliers.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;"><i class="fa-solid fa-magnifying-glass fa-2x"></i><p>No suppliers match your search.</p></div>`;
+        return;
+    }
+
+    container.innerHTML = visibleSuppliers.map(sup => `
         <div class="supplier-card" style="flex-direction:column;align-items:flex-start;padding:14px;border-radius:var(--radius-md);cursor:default;">
             <div style="display:flex;align-items:center;gap:12px;width:100%;">
                 <div class="supplier-avatar">${(sup.name || sup.company_name || 'S').charAt(0).toUpperCase()}</div>
@@ -1476,9 +1667,15 @@ async function loadBuyerDashboardData() {
         // Render All 5 Panes
         renderBuyerSuppliersGrid();
         renderBuyerPOs();
+        lastBuyerPending = pendingInvoices;
+        lastBuyerApproved = approvedInvoices;
+        lastBuyerBorrowed = borrowedInvoices;
         renderBuyerPendingRequests(pendingInvoices);
         renderBuyerApprovedInvoices(approvedInvoices);
         renderBuyerBorrowedInvoices(borrowedInvoices);
+
+        updateActionQueue();
+        updateLifecycleBanner();
 
     } catch (err) {
         console.error("Error loading buyer dashboard data:", err);
@@ -2337,6 +2534,309 @@ async function handleCreateInvoice(event) {
         await refreshStats();
     } catch (err) {
         showToast(`Error: ${err.message}`, "error");
+    }
+}
+
+// =====================================================================
+//  ADMIN PORTAL & END-TO-END AI PIPELINE EXPLORER
+// =====================================================================
+async function loadAdminAuditLedger() {
+    try {
+        const invRes = await fetch(`${API_BASE}/invoices`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (invRes.ok) {
+            const invoices = await invRes.json();
+            const selectEl = document.getElementById("admin-pipeline-invoice-select");
+            if (selectEl && invoices.length > 0) {
+                const currentVal = selectEl.value;
+                selectEl.innerHTML = invoices.map(i => `
+                    <option value="${i.id}">
+                        #${i.invoice_number} | ${formatMoney(i.amount || 0)} | ${i.buyer_company_name || 'Buyer'} (${formatStatus(i.status)})
+                    </option>
+                `).join("");
+                if (currentVal && invoices.some(i => i.id === currentVal)) {
+                    selectEl.value = currentVal;
+                } else {
+                    selectEl.value = invoices[0].id;
+                }
+                await loadAdminPipelineAnalysis();
+            }
+        }
+
+        const res = await fetch(`${API_BASE}/admin/audit-logs`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        const tableBody = document.getElementById("admin-tx-table");
+        if (!tableBody) return;
+
+        if (res.ok) {
+            const logs = await res.json();
+            if (logs.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:32px;color:var(--text-muted);">No audit transactions recorded yet.</td></tr>`;
+                return;
+            }
+
+            tableBody.innerHTML = logs.map(l => `
+                <tr>
+                    <td style="font-family:var(--font-mono);font-weight:700;font-size:0.8rem;">${(l.id || '').substring(0, 8)}…</td>
+                    <td><span class="status-pill pending" style="font-size:0.7rem;">${l.action || 'EVENT'}</span></td>
+                    <td style="font-weight:700;">${l.details && l.details.amount ? formatMoney(l.details.amount) : '—'}</td>
+                    <td>${l.user_id ? l.user_id.substring(0, 8) + '…' : 'System'}</td>
+                    <td>${l.resource_type || 'Audit'}</td>
+                    <td style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-muted);">${(l.details && l.details.target_user) || l.ip_address || '0x88F2…'}</td>
+                    <td><span class="status-pill verified" style="font-size:0.7rem;">RECORDED</span></td>
+                </tr>
+            `).join("");
+        } else {
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center" style="padding:32px;color:var(--text-muted);">No logs available.</td></tr>`;
+        }
+    } catch (err) {
+        console.error("Admin ledger loading error:", err);
+    }
+}
+
+async function loadAdminPipelineAnalysis() {
+    const selectEl = document.getElementById("admin-pipeline-invoice-select");
+    const container = document.getElementById("admin-pipeline-details-container");
+    if (!selectEl || !container) return;
+
+    const invoiceId = selectEl.value;
+    if (!invoiceId) {
+        container.innerHTML = `<div class="empty-state" style="padding:30px;"><p>No invoice selected.</p></div>`;
+        return;
+    }
+
+    try {
+        container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--accent-indigo);"><i class="fa-solid fa-spinner fa-spin fa-2x"></i><p style="margin-top:10px;font-size:0.9rem;font-weight:600;">Running AI Verification, ML Risk &amp; Suitability Pipeline...</p></div>`;
+
+        const res = await fetch(`${API_BASE}/admin/pipeline-analysis/${invoiceId}`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || "Failed to load pipeline analysis");
+        }
+
+        const data = await res.json();
+        const v = data.step_1_verification;
+        const r = data.step_2_risk_model;
+        const elig = data.step_3_provider_eligibility;
+        const s = data.step_4_suitability_and_matching;
+        const alloc = data.step_5_capital_allocation;
+        const learn = data.step_6_learning_loop;
+
+        container.innerHTML = `
+            <!-- Invoice Meta Header -->
+            <div style="background:var(--bg-card-alt);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div>
+                    <span style="font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;font-weight:800;">Target Invoice</span>
+                    <h3 style="font-size:1.1rem;font-weight:800;color:var(--text-primary);margin:2px 0;">
+                        #${data.invoice_number} &bull; ${data.supplier_name} &rarr; ${data.buyer_name}
+                    </h3>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">Tenor: <strong>${data.tenor_days} Days</strong> | Due: ${data.due_date}</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-size:0.75rem;color:var(--text-secondary);">Face Value Amount</span>
+                    <div style="font-size:1.35rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">${formatMoney(data.amount)}</div>
+                    <span class="status-pill ${getStatusClass(data.status)}" style="margin-top:4px;">${formatStatus(data.status)}</span>
+                </div>
+            </div>
+
+            <!-- Pipeline Step Flow Grid (6 Sequential Stages) -->
+            <div style="display:grid;grid-template-columns:1fr;gap:18px;">
+                
+                <!-- STAGE 1: VERIFICATION CHECKLIST (0-100) -->
+                <div class="glass-panel" style="padding:16px;border-left:4px solid var(--accent-indigo);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h4 style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:8px;">
+                            <span style="background:var(--accent-indigo);color:#fff;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;">1</span>
+                            AI Verification Score &amp; Evidence Checklist
+                        </h4>
+                        <span class="badge ${v.verification_score >= 85 ? 'badge-success' : 'badge-warning'}" style="font-size:0.9rem;font-weight:800;padding:6px 12px;">
+                            Score: ${v.verification_score} / 100 (${v.verification_status})
+                        </span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:8px;margin-bottom:10px;">
+                        ${v.checklist.map(item => `
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;font-size:0.8rem;">
+                                <span style="display:flex;align-items:center;gap:8px;">
+                                    <i class="fa-solid ${item.passed ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-warning'}"></i>
+                                    ${item.item}
+                                </span>
+                                <strong style="color:${item.passed ? 'var(--accent-emerald)' : 'var(--accent-amber)'}">+${item.score} pts</strong>
+                            </div>
+                        `).join("")}
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);">
+                        <strong>Rule Mapping:</strong> Score &ge; 85 &rarr; <span class="status-pill verified">VERIFIED</span> | 50-84 &rarr; <span class="status-pill offer">PARTIALLY VERIFIED</span> | &lt; 50 &rarr; <span class="status-pill disputed">DISPUTED</span>
+                    </div>
+                </div>
+
+                <!-- STAGE 2: PROTOTYPE ML CREDIT RISK MODEL -->
+                <div class="glass-panel" style="padding:16px;border-left:4px solid ${r.risk_score <= 25 ? 'var(--accent-emerald)' : (r.risk_score <= 50 ? 'var(--accent-amber)' : 'var(--accent-rose)')};">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h4 style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:8px;">
+                            <span style="background:var(--accent-purple);color:#fff;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;">2</span>
+                            Explainable ML Credit Risk Model
+                        </h4>
+                        <span class="status-pill ${r.risk_score <= 25 ? 'verified' : (r.risk_score <= 50 ? 'pending' : 'disputed')}" style="font-size:0.85rem;font-weight:800;padding:6px 12px;">
+                            Risk Score: ${r.risk_score} / 100 (${r.risk_band} RISK)
+                        </span>
+                    </div>
+
+                    <!-- MANDATORY PROTOTYPE DISCLAIMER BANNER -->
+                    <div style="background:rgba(245,158,11,0.1);border:1px solid var(--accent-amber);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:0.78rem;color:var(--text-primary);display:flex;align-items:center;gap:10px;">
+                        <i class="fa-solid fa-lightbulb" style="color:var(--accent-amber);font-size:1.1rem;"></i>
+                        <div>
+                            <strong>Prototype Heuristic Model Disclaimer:</strong> ${r.disclaimer}
+                        </div>
+                    </div>
+
+                    <!-- Formula Factor breakdown chips -->
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                        <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;font-size:0.78rem;">
+                            Verification Inverse (30%): <strong>+${r.formula_breakdown.verification_inverse_30pct} pts</strong>
+                        </span>
+                        <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;font-size:0.78rem;">
+                            Buyer Default Factor (25%): <strong>+${r.formula_breakdown.buyer_default_factor_25pct} pts</strong>
+                        </span>
+                        <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;font-size:0.78rem;">
+                            Amount Deviation (15%): <strong>+${r.formula_breakdown.amount_deviation_factor_15pct} pts</strong>
+                        </span>
+                        <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;font-size:0.78rem;">
+                            Days to Due (15%): <strong>+${r.formula_breakdown.days_to_due_factor_15pct} pts</strong>
+                        </span>
+                        <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);padding:6px 10px;font-size:0.78rem;">
+                            Supplier Track Record (15%): <strong>+${r.formula_breakdown.supplier_track_factor_15pct} pts</strong>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- STAGE 3: PROVIDER ELIGIBILITY & CONSTRAINTS FILTER -->
+                <div class="glass-panel" style="padding:16px;border-left:4px solid var(--accent-cyan);">
+                    <h4 style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                        <span style="background:var(--accent-cyan);color:#fff;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;">3</span>
+                        Capital Provider Eligibility &amp; Constraints Filter
+                    </h4>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;">
+                        ${elig.map(p => `
+                            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                    <strong style="font-size:0.88rem;">${p.name}</strong>
+                                    <span class="status-pill ${p.is_eligible ? 'verified' : 'disputed'}" style="font-size:0.7rem;">
+                                        ${p.is_eligible ? 'ELIGIBLE' : 'FILTERED OUT'}
+                                    </span>
+                                </div>
+                                <div style="font-size:0.75rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;">
+                                    <div>&bull; <strong>Liquidity:</strong> ${p.checks.available_capital}</div>
+                                    <div>&bull; <strong>Funding Limits:</strong> ${p.checks.funding_bounds}</div>
+                                    <div>&bull; <strong>Risk Policy:</strong> ${p.checks.risk_appetite}</div>
+                                    <div>&bull; <strong>Tenor Policy:</strong> ${p.checks.tenure_fit}</div>
+                                </div>
+                            </div>
+                        `).join("")}
+                    </div>
+                </div>
+
+                <!-- STAGE 4: MULTI-FACTOR SUITABILITY ENGINE & OFFER COMPARISON -->
+                <div class="glass-panel" style="padding:16px;border-left:4px solid var(--accent-amber);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                        <h4 style="font-size:0.95rem;font-weight:800;display:flex;align-items:center;gap:8px;">
+                            <span style="background:var(--accent-amber);color:#fff;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.75rem;">4</span>
+                            Multi-Factor AI Suitability Matching Engine (Core AI Decision)
+                        </h4>
+                        <span class="badge badge-ai"><i class="fa-solid fa-crown"></i> Explainable Ranking</span>
+                    </div>
+
+                    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:14px;background:var(--bg-card);padding:10px 14px;border-radius:6px;border-left:3px solid var(--accent-indigo);">
+                        <strong>AI Matching Philosophy:</strong> ${s.ai_match_philosophy}
+                    </div>
+
+                    <!-- Offers Comparison Table & Visual Bars -->
+                    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px;">
+                        ${s.offers_comparison.map((off, idx) => `
+                            <div class="glass-panel ${off.is_ai_recommended ? 'ai-recommended' : ''}" style="padding:14px;margin:0;border:1px solid ${off.is_ai_recommended ? 'var(--accent-amber)' : 'var(--border)'};">
+                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+                                    <div style="display:flex;align-items:center;gap:10px;">
+                                        <strong style="font-size:0.92rem;color:var(--text-primary);">${off.provider_name}</strong>
+                                        ${off.is_ai_recommended ? '<span class="ai-match-badge" style="font-size:0.68rem;padding:3px 8px;"><i class="fa-solid fa-crown"></i> #1 AI Best Match</span>' : `<span class="badge" style="font-size:0.68rem;">Rank #${idx + 1}</span>`}
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:14px;">
+                                        <div style="text-align:right;">
+                                            <span style="font-size:0.7rem;color:var(--text-secondary);display:block;">Suitability Score</span>
+                                            <strong style="font-size:1.15rem;color:${off.is_ai_recommended ? 'var(--accent-indigo)' : 'var(--text-primary)'};font-family:var(--font-mono);">${off.suitability_score} / 100</strong>
+                                        </div>
+                                        <div style="text-align:right;">
+                                            <span style="font-size:0.7rem;color:var(--text-secondary);display:block;">Offered APR</span>
+                                            <strong style="font-size:1.15rem;color:var(--accent-emerald);font-family:var(--font-mono);">${off.offered_apr}%</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Suitability Progress Bar -->
+                                <div class="score-bar-wrap mb-12" style="height:8px;">
+                                    <div class="score-bar-fill" style="width:${off.suitability_score}%;background:${off.is_ai_recommended ? 'linear-gradient(90deg, var(--accent-indigo), var(--accent-purple))' : 'var(--accent-indigo)'};"></div>
+                                </div>
+
+                                <!-- Factor breakdown chips -->
+                                <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:0.74rem;color:var(--text-secondary);margin-bottom:8px;">
+                                    <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);">Amount Fit (30%): ${off.breakdown.funding_amount_fit_pts} pts</span>
+                                    <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);">Cost Score (20%): ${off.breakdown.cost_score_pts} pts</span>
+                                    <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);">Speed Score (15%): ${off.breakdown.speed_score_pts} pts (${off.payout_speed})</span>
+                                    <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);">Fee Score (10%): ${off.breakdown.fee_score_pts} pts ($${off.origination_fee})</span>
+                                    <span class="badge" style="background:var(--bg-card);border:1px solid var(--border);">Reliability (10%): ${off.breakdown.reliability_pts} pts (${off.provider_reliability}%)</span>
+                                </div>
+
+                                <!-- Plain English AI Explanation Callout -->
+                                <div style="font-size:0.78rem;color:var(--text-primary);background:var(--bg-card);padding:8px 12px;border-radius:6px;border-left:3px solid ${off.is_ai_recommended ? 'var(--accent-amber)' : 'var(--border)'}">
+                                    <strong>Why ${off.is_ai_recommended ? 'Recommended' : 'Ranked Here'}:</strong> ${off.why_explanation}
+                                </div>
+                            </div>
+                        `).join("")}
+                    </div>
+                </div>
+
+                <!-- STAGE 5 & STAGE 6: ALLOCATION & LEARNING LOOP -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;">
+                    <!-- STAGE 5: KNAPSACK ALLOCATION -->
+                    <div class="glass-panel" style="padding:16px;border-left:4px solid var(--accent-emerald);margin:0;">
+                        <h4 style="font-size:0.92rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                            <span style="background:var(--accent-emerald);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;">5</span>
+                            Capital Allocation &amp; Knapsack Optimization
+                        </h4>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:6px;">
+                            <div>&bull; <strong>Allocation Method:</strong> ${alloc.allocation_method}</div>
+                            <div>&bull; <strong>Allocated to Invoice:</strong> <strong style="color:var(--accent-emerald);">${formatMoney(alloc.capital_allocated)}</strong></div>
+                            <div>&bull; <strong>Total Available Market Liquidity:</strong> ${formatMoney(alloc.total_available_liquidity)}</div>
+                            <div>&bull; <strong>Total Active Invoice Demand:</strong> ${formatMoney(alloc.total_market_demand)}</div>
+                        </div>
+                    </div>
+
+                    <!-- STAGE 6: SETTLEMENT & LEARNING LOOP -->
+                    <div class="glass-panel" style="padding:16px;border-left:4px solid var(--accent-rose);margin:0;">
+                        <h4 style="font-size:0.92rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                            <span style="background:var(--accent-rose);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;">6</span>
+                            Settlement &amp; Feedback Learning Loop
+                        </h4>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:6px;">
+                            <div>&bull; <strong>Model Engine Version:</strong> ${learn.model_version}</div>
+                            <div>&bull; <strong>Settlement Feedback Logs:</strong> ${learn.settlement_feedback_log_count} events recorded</div>
+                            <div>&bull; <strong>Current Risk Weight Adjustment:</strong> ${learn.current_weight_adjustment.risk_weight_adjustment}%</div>
+                            <div style="margin-top:4px;">
+                                <button class="btn btn-secondary btn-sm" onclick="simulateSettlement('${data.invoice_id}', ${data.amount})">
+                                    <i class="fa-solid fa-rotate-right"></i> Trigger Settlement &amp; Feedback Log
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        `;
+    } catch (err) {
+        container.innerHTML = `<div class="empty-state" style="padding:30px;color:var(--accent-rose);"><i class="fa-solid fa-triangle-exclamation fa-2x"></i><p style="margin-top:10px;">Pipeline analysis error: ${err.message}</p></div>`;
     }
 }
 
