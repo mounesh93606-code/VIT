@@ -1,0 +1,37 @@
+# Secrets & local config
+.env
+
+# SQLite database files (not committed — DB is seeded on startup in production)
+*.db
+*.db-shm
+*.db-wal
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ML model binaries (auto-trained on startup)
+*.pkl
+ml/risk_model/*.pkl
+ml/risk_model/model_metadata.json
+
+# Test & coverage cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

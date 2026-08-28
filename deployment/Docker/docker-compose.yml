@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scf_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: scf_user
+      POSTGRES_PASSWORD: scf_password
+      POSTGRES_DB: scf_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scf_user -d scf_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deployment/Docker/Dockerfile
+    container_name: scf_backend_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://scf_user:scf_password@postgres:5432/scf_db
+      - SECRET_KEY=production_jwt_secret_key_scf_nexus_2026
+      - ENV=production
+      - DEBUG=False
+      - ALLOWED_ORIGINS=*
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

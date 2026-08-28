@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCF Nexus | AI-Powered Supply Chain Finance Marketplace</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+    <!-- Top Navigation Header -->
+    <header class="navbar">
+        <div class="logo-brand">
+            <div class="logo-icon"><i class="fa-solid fa-cube"></i></div>
+            <div class="logo-text">
+                <span class="brand-title">SCF <span class="highlight">NEXUS</span></span>
+                <span class="brand-subtitle">AI Supply Chain Finance Marketplace</span>
+            </div>
+        </div>
+
+        <!-- Role Selector Tabs -->
+        <nav class="role-selector">
+            <button class="role-btn active" data-role="supplier" onclick="switchRole('supplier')">
+                <i class="fa-solid fa-industry"></i> Supplier
+            </button>
+            <button class="role-btn" data-role="buyer" onclick="switchRole('buyer')">
+                <i class="fa-solid fa-cart-shopping"></i> Buyer
+            </button>
+            <button class="role-btn" data-role="financier" onclick="switchRole('financier')">
+                <i class="fa-solid fa-building-columns"></i> Financier
+            </button>
+            <button class="role-btn" data-role="admin" onclick="switchRole('admin')">
+                <i class="fa-solid fa-brain"></i> AI Brain & Admin
+            </button>
+        </nav>
+
+        <div class="user-profile-badge">
+            <div class="status-indicator online"></div>
+            <span id="active-user-name">Apex Industrial Ltd</span>
+            <span class="user-role-tag" id="active-role-tag">SUPPLIER</span>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; margin-left: 6px;" onclick="openModal('modal-register')">Register</button>
+            <button class="btn btn-danger" style="padding: 4px 10px; font-size: 0.75rem; margin-left: 4px;" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+    </header>
+
+    <!-- System Metrics Banner -->
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-icon purple"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+            <div class="stat-info">
+                <span class="stat-label">Total Invoices Volume</span>
+                <span class="stat-value" id="stat-total-volume">$0.00</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-bolt"></i></div>
+            <div class="stat-info">
+                <span class="stat-label">Funded Disbursed</span>
+                <span class="stat-value" id="stat-funded-volume">$0.00</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="fa-solid fa-vault"></i></div>
+            <div class="stat-info">
+                <span class="stat-label">Active Liquidity Pool</span>
+                <span class="stat-value" id="stat-liquidity-pool">$0.00</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon amber"><i class="fa-solid fa-microchip"></i></div>
+            <div class="stat-info">
+                <span class="stat-label">AI Matching Engine</span>
+                <span class="stat-value text-success">ACTIVE <i class="fa-solid fa-circle-check"></i></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workflow Lifecycle Guidance Banner -->
+    <div class="lifecycle-banner">
+        <div class="step-pill active"><span class="step-num">1</span> <span>Supplier Invoice Upload</span></div>
+        <div class="step-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="step-pill active"><span class="step-num">2</span> <span>Buyer Verification</span></div>
+        <div class="step-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="step-pill active"><span class="step-num">3</span> <span>AI Risk & Suitability Scoring</span></div>
+        <div class="step-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="step-pill active"><span class="step-num">4</span> <span>Financier Offer Bidding</span></div>
+        <div class="step-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="step-pill active"><span class="step-num">5</span> <span>Supplier Disburse Payout</span></div>
+        <div class="step-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+        <div class="step-pill active"><span class="step-num">6</span> <span>Buyer Settlement & Yield</span></div>
+    </div>
+
+    <!-- Main Dynamic Workspace Content -->
+    <main class="container">
+
+        <!-- ==================== SUPPLIER PORTAL ==================== -->
+        <section id="portal-supplier" class="portal-view active-view">
+            <div class="portal-header">
+                <div>
+                    <h2><i class="fa-solid fa-industry"></i> Supplier Operations Center</h2>
+                    <p class="subtitle">Upload invoices, track multi-factor verification, evaluate AI financing matches & request instant payouts.</p>
+                </div>
+                <button class="btn btn-primary" onclick="openModal('modal-create-invoice')">
+                    <i class="fa-solid fa-plus"></i> Submit New Invoice
+                </button>
+            </div>
+
+            <div class="grid-2-cols">
+                <!-- Left: Active Invoices & Offers -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-list-check"></i> Your Invoices & Verification Lifecycle</h3>
+                        <span class="badge" id="supplier-invoice-count">3 Invoices</span>
+                    </div>
+                    <div id="supplier-invoices-list" class="invoice-cards-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Right: AI Financing Offers & Suitability Ranker -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-wand-magic-sparkles"></i> AI Multi-Factor Offer Matcher</h3>
+                        <span class="badge badge-ai"><i class="fa-solid fa-brain"></i> Ranker Active</span>
+                    </div>
+                    <div id="supplier-offers-panel">
+                        <div class="empty-state">
+                            <i class="fa-solid fa-paper-plane fa-2x"></i>
+                            <p>Select a verified invoice on the left to inspect AI-ranked financing offers.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== BUYER PORTAL ==================== -->
+        <section id="portal-buyer" class="portal-view">
+            <div class="portal-header">
+                <div>
+                    <h2><i class="fa-solid fa-cart-shopping"></i> Buyer Verification Hub</h2>
+                    <p class="subtitle">Inspect submitted supplier invoices, review PO matching evidence & issue digital approvals/disputes.</p>
+                </div>
+            </div>
+
+            <div class="grid-2-cols">
+                <!-- Pending Approvals -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> Invoices Awaiting Buyer Approval</h3>
+                    </div>
+                    <div id="buyer-pending-list" class="invoice-cards-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Evidence Verification Checklist & Action -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-shield-halved"></i> Verification Evidence Matrix</h3>
+                    </div>
+                    <div id="buyer-verification-detail">
+                        <div class="empty-state">
+                            <i class="fa-solid fa-magnifying-glass fa-2x"></i>
+                            <p>Select an invoice from the pending queue to perform evidence verification.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== FINANCIER PORTAL ==================== -->
+        <section id="portal-financier" class="portal-view">
+            <div class="portal-header">
+                <div>
+                    <h2><i class="fa-solid fa-building-columns"></i> Financier Liquidity & Risk Desk</h2>
+                    <p class="subtitle">Deploy capital pools, set risk criteria, review AI matched opportunities & generate dynamic financing offers.</p>
+                </div>
+                <div class="liquidity-badge-large">
+                    <span>Active Liquidity Pool:</span>
+                    <strong id="financier-pool-display">$10,000,000.00</strong>
+                </div>
+            </div>
+
+            <div class="grid-2-cols">
+                <!-- AI Matched Invoices Feed -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-bullseye"></i> AI-Matched Investment Opportunities</h3>
+                    </div>
+                    <div id="financier-matched-feed" class="invoice-cards-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- Dynamic Offer Generator & Active Payouts -->
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-calculator"></i> Dynamic Rate & APR Calculator</h3>
+                    </div>
+                    <div id="financier-offer-calculator">
+                        <div class="empty-state">
+                            <i class="fa-solid fa-hand-holding-dollar fa-2x"></i>
+                            <p>Select an opportunity from the AI feed to configure financing terms.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== ADMIN & AI BRAIN PORTAL ==================== -->
+        <section id="portal-admin" class="portal-view">
+            <div class="portal-header">
+                <div>
+                    <h2><i class="fa-solid fa-brain"></i> AI Brain & Marketplace Allocation Monitor</h2>
+                    <p class="subtitle">Monitor autonomous agents, real-time ML risk scores, MILP allocation optimization & system audit logs.</p>
+                </div>
+            </div>
+
+            <!-- 5 AI Agents Status Row -->
+            <div class="ai-agents-grid">
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <i class="fa-solid fa-file-contract agent-icon"></i>
+                        <span class="agent-status online">ONLINE</span>
+                    </div>
+                    <h4>Invoice Extraction Agent</h4>
+                    <p>Parses invoice PDFs, validates metadata & generates cryptographic document hashes.</p>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <i class="fa-solid fa-chart-line agent-icon"></i>
+                        <span class="agent-status online">ONLINE</span>
+                    </div>
+                    <h4>ML Credit Risk Agent</h4>
+                    <p>Calculates multi-dimensional risk scores combining XGBoost models & buyer ratings.</p>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <i class="fa-solid fa-network-wired agent-icon"></i>
+                        <span class="agent-status online">ONLINE</span>
+                    </div>
+                    <h4>Liquidity Matching Agent</h4>
+                    <p>Matches risk profiles against financier portfolio limits & risk appetites.</p>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <i class="fa-solid fa-coins agent-icon"></i>
+                        <span class="agent-status online">ONLINE</span>
+                    </div>
+                    <h4>Dynamic Pricing Agent</h4>
+                    <p>Computes risk-adjusted APRs, early payment discount rates & tenor yields.</p>
+                </div>
+
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <i class="fa-solid fa-rotate agent-icon"></i>
+                        <span class="agent-status online">ONLINE</span>
+                    </div>
+                    <h4>Feedback Learning Agent</h4>
+                    <p>Adjusts underwriting weights based on historical repayment settlement cycles.</p>
+                </div>
+            </div>
+
+            <!-- Ledger & Audit Log -->
+            <div class="glass-panel margin-top-lg">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-database"></i> Platform Transactions & Audit Ledger</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Sender Account</th>
+                                <th>Recipient Account</th>
+                                <th>Hash Signature</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-tx-table">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal: Submit Invoice -->
+    <div id="modal-create-invoice" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-file-circle-plus"></i> Submit Invoice for SCF Financing</h3>
+                <button class="close-btn" onclick="closeModal('modal-create-invoice')">&times;</button>
+            </div>
+            <form id="form-create-invoice" onsubmit="handleCreateInvoice(event)">
+                <div class="form-group">
+                    <label>Invoice Number</label>
+                    <input type="text" id="inp-inv-num" required placeholder="e.g. INV-2026-909" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Buyer Company</label>
+                    <select id="inp-buyer-id" required class="form-control">
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+                <div class="grid-2-cols">
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" step="100" id="inp-amount" required placeholder="e.g. 150000" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Tenor (Days)</label>
+                        <input type="number" id="inp-tenor" value="60" required class="form-control">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description & Goods Delivered</label>
+                    <textarea id="inp-desc" rows="3" placeholder="Provide PO reference & details of goods delivered..." class="form-control"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-invoice')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit for AI Verification</button>
+                </div>
+            </form>
+        <!-- ==================== UNAUTHORIZED (403) PORTAL ==================== -->
+        <section id="portal-unauthorized" class="portal-view">
+            <div class="glass-panel text-center" style="max-width: 600px; margin: 40px auto; padding: 40px;">
+                <i class="fa-solid fa-lock fa-3x" style="color: var(--accent-rose); margin-bottom: 16px;"></i>
+                <h2>403 — Unauthorized Access</h2>
+                <p class="subtitle" style="margin: 12px 0 24px 0;">Your current role is not authorized to access this resource or dashboard.</p>
+                <button class="btn btn-primary" onclick="switchRole('supplier')">Return to Permitted Role Dashboard</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Registration Modal -->
+    <div id="modal-register" class="modal-backdrop">
+        <div class="modal-content glass-panel" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-plus"></i> Account Registration</h3>
+                <button class="close-btn" onclick="closeModal('modal-register')">&times;</button>
+            </div>
+            <form id="form-register" onsubmit="handleRegister(event)">
+                <div class="grid-2-cols">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="reg-name" required placeholder="John Doe" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="reg-email" required placeholder="user@company.com" class="form-control">
+                    </div>
+                </div>
+
+                <div class="grid-2-cols">
+                    <div class="form-group">
+                        <label>Password (min 8 chars)</label>
+                        <input type="password" id="reg-pass" required minlength="8" placeholder="••••••••" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="reg-confirm-pass" required minlength="8" placeholder="••••••••" class="form-control">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Role Category</label>
+                    <select id="reg-role" required class="form-control" onchange="toggleRegisterRoleFields()">
+                        <option value="supplier">Supplier (Invoice Creator)</option>
+                        <option value="buyer">Buyer (Invoice Approver)</option>
+                        <option value="financier">Financier (Capital Provider)</option>
+                    </select>
+                </div>
+
+                <div id="reg-company-field" class="form-group">
+                    <label>Company Name & Tax ID</label>
+                    <div class="grid-2-cols">
+                        <input type="text" id="reg-company" placeholder="Company Name" class="form-control">
+                        <input type="text" id="reg-tax" placeholder="Tax ID / Reg Num" class="form-control">
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('modal-register')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast container -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
