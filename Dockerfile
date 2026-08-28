@@ -12,7 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     curl \
-    && rm -rf /var/lib/apt-get/lists/*
+    && rm -rf /var/lib/apt/lists/*
+
+# Install email-validator explicitly first (required by pydantic[email])
+RUN pip install --no-cache-dir email-validator>=2.1.0
 
 # Copy dependency requirements and install
 COPY requirements.txt .
