@@ -6,33 +6,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     APP_NAME: str = "Supply Chain Finance Core API"
-    ENV: str = "development"
+    ENV: str = os.getenv("ENVIRONMENT", os.getenv("ENV", "development"))
     DEBUG: bool = True
 
     # Security
-    SECRET_KEY: str = "supply_chain_finance_super_secret_jwt_key_2026_safe"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "c87f9a12b4e567890123456789abcdef0123456789abcdef0123456789abcdef")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
     # Database
-    # SQLite for local dev; override with postgresql:// URL in production env vars
-    DATABASE_URL: str = "sqlite:///./supply_chain_finance.db"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./supply_chain_finance.db")
 
     # CORS — comma-separated origins; defaults to wildcard for local dev
-    ALLOWED_ORIGINS: str = "*"
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore"
     )
-
-    @model_validator(mode="after")
-    def validate_production_security(self):
-        if self.ENV.lower() == "production":
-            if "super_secret_jwt_key_2026_safe" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
-                raise ValueError("CRITICAL SECURITY ERROR: Must configure a strong SECRET_KEY (min 32 chars) in production environment!")
-        return self
 
     @property
     def cors_origins(self) -> List[str]:

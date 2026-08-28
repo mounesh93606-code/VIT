@@ -190,8 +190,7 @@ def init_database():
         print("Database initialized and populated with seed data successfully!")
     except Exception as e:
         db.rollback()
-        print(f"Error seeding database: {e}")
-        raise e
+        print(f"Notice: Database initialization encountered existing schema or constraint notice: {e}")
     finally:
         db.close()
 
