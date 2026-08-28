@@ -10,6 +10,10 @@ const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.ho
     : `${window.location.origin}/api`;
 
 // ─── State ───────────────────────────────────────────────────────────
+function formatMoney(amount) {
+    return '₹' + (amount || 0).toLocaleString('en-IN');
+}
+
 let currentRole          = "supplier";
 let authToken            = null;
 let currentUser          = null;
@@ -424,11 +428,11 @@ async function refreshStats() {
         const res = await fetch(`${API_BASE}/stats`);
         if (!res.ok) return;
         const stats = await res.json();
-        document.getElementById("stat-total-volume").textContent  = `$${(stats.total_invoices_volume  || 0).toLocaleString()}`;
-        document.getElementById("stat-funded-volume").textContent = `$${(stats.total_funded_volume    || 0).toLocaleString()}`;
-        document.getElementById("stat-liquidity-pool").textContent= `$${(stats.active_liquidity_pool  || 0).toLocaleString()}`;
+        document.getElementById("stat-total-volume").textContent  = formatMoney(stats.total_invoices_volume  || 0);
+        document.getElementById("stat-funded-volume").textContent = formatMoney(stats.total_funded_volume    || 0);
+        document.getElementById("stat-liquidity-pool").textContent= formatMoney(stats.active_liquidity_pool  || 0);
         const pool = document.getElementById("financier-pool-display");
-        if (pool) pool.textContent = `$${(stats.active_liquidity_pool || 0).toLocaleString()}`;
+        if (pool) pool.textContent = formatMoney(stats.active_liquidity_pool || 0);
     } catch (err) { console.warn("Stats error:", err); }
 }
 
@@ -472,16 +476,16 @@ async function loadSupplierDashboardData() {
 
         // Update Supplier KPI Bar
         const statRec = document.getElementById("s-stat-receivables");
-        if (statRec) statRec.textContent = `$${totalBooked.toLocaleString()} (${invoicesData.length} Inv${invoicesData.length === 1 ? '' : 's'})`;
+        if (statRec) statRec.textContent = `${formatMoney(totalBooked)} (${invoicesData.length} Inv${invoicesData.length === 1 ? '' : 's'})`;
 
         const statFun = document.getElementById("s-stat-funded");
-        if (statFun) statFun.textContent = `$${fundedCash.toLocaleString()} (${fundedInvoices.length} Disbursed)`;
+        if (statFun) statFun.textContent = `${formatMoney(fundedCash)} (${fundedInvoices.length} Disbursed)`;
 
         const statUnf = document.getElementById("s-stat-unfunded");
-        if (statUnf) statUnf.textContent = `$${remainingBalance.toLocaleString()} Unfunded`;
+        if (statUnf) statUnf.textContent = `${formatMoney(remainingBalance)} Unfunded`;
 
         const statVer = document.getElementById("s-stat-verification");
-        if (statVer) statVer.textContent = `$${pendingVerifVol.toLocaleString()} (${pendingVerifInvoices.length} Pending)`;
+        if (statVer) statVer.textContent = `${formatMoney(pendingVerifVol)} (${pendingVerifInvoices.length} Pending)`;
 
         const statOrd = document.getElementById("s-stat-buyer-orders");
         if (statOrd) statOrd.textContent = `${purchaseOrders.length} Request${purchaseOrders.length === 1 ? '' : 's'}`;
@@ -563,7 +567,7 @@ function renderSupplierBuyerRequests() {
                     </div>
                     <div style="display:flex;justify-content:space-between;font-size:0.95rem;padding-top:6px;border-top:1px dashed var(--border);">
                         <span style="font-weight:700;color:var(--text-secondary);">Order Value:</span>
-                        <strong style="color:var(--accent-emerald);font-size:1.1rem;font-family:var(--font-mono);">$${(po.value || 0).toLocaleString()}</strong>
+                        <strong style="color:var(--accent-emerald);font-size:1.1rem;font-family:var(--font-mono);">${formatMoney(po.value || 0)}</strong>
                     </div>
                 </div>
 
@@ -643,7 +647,7 @@ function renderSupplierInvoicesList() {
                 </div>
                 <div class="inv-card-body">
                     <div>
-                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">${formatMoney(inv.amount || 0)}</div>
                         <div class="inv-meta" style="margin-top:2px;">
                             Buyer: <strong>${inv.buyer_company_name || 'Global Retailers Inc'}</strong>
                         </div>
@@ -706,7 +710,7 @@ function renderSupplierVerificationAudit() {
                     </span>
                 </div>
                 <div class="inv-amount" style="font-size:1.25rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
-                    $${(selectedInvoice.amount || 0).toLocaleString()}
+                    ${formatMoney(selectedInvoice.amount || 0)}
                 </div>
             </div>
 
@@ -790,7 +794,7 @@ function renderSupplierFinancingInvoices() {
                 </div>
                 <div class="inv-card-body">
                     <div>
-                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">${formatMoney(inv.amount || 0)}</div>
                         <div class="inv-meta" style="margin-top:2px;">Buyer: <strong>${inv.buyer_company_name || 'Global Retailers'}</strong></div>
                     </div>
                     <div class="inv-meta text-right">
@@ -833,7 +837,7 @@ async function renderSupplierOffersPanel() {
                 <div class="evidence-box mb-12">
                     <h4 style="margin-bottom:6px;">Invoice ${selectedInvoice.invoice_number}</h4>
                     <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 10px 0;">
-                        Amount: <strong>$${selectedInvoice.amount.toLocaleString()}</strong> &bull; Buyer: <strong>${selectedInvoice.buyer_company_name || 'Global Retailers'}</strong>
+                        Amount: <strong>${formatMoney(selectedInvoice.amount)}</strong> &bull; Buyer: <strong>${selectedInvoice.buyer_company_name || 'Global Retailers'}</strong>
                     </p>
                     <div class="evidence-item">
                         <span>AI Underwriting Readiness</span>
@@ -882,7 +886,7 @@ async function renderSupplierOffersPanel() {
                                 <span class="badge badge-ai" style="margin-top:4px;">Score: <strong>${score}/100</strong></span>
                             </div>
                             <div class="text-right">
-                                <div style="font-size:1.2rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">$${off.offered_amount.toLocaleString()}</div>
+                                <div style="font-size:1.2rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">${formatMoney(off.offered_amount)}</div>
                                 <small class="text-muted">Rate: ${off.discount_rate_pct}% (${off.apr_pct}% APR)</small>
                             </div>
                         </div>
@@ -899,7 +903,7 @@ async function renderSupplierOffersPanel() {
                         ${off.status === 'EXTENDED' ? `
                             <button class="btn ${isTop ? 'btn-success' : 'btn-primary'} btn-full"
                                     onclick="acceptOffer('${off.id}')">
-                                <i class="fa-solid fa-bolt"></i> Accept Offer &amp; Disburse $${off.offered_amount.toLocaleString()}
+                                <i class="fa-solid fa-bolt"></i> Accept Offer &amp; Disburse ${formatMoney(off.offered_amount)}
                             </button>
                         ` : `<div class="badge badge-info" style="display:block;text-align:center;padding:8px;">Status: ${off.status}</div>`}
                     </div>
@@ -929,7 +933,7 @@ async function acceptOffer(offerId) {
 
         if (disbRes.ok) {
             const d = await disbRes.json();
-            showToast(`Capital Disbursed! $${d.amount.toLocaleString()} sent to your bank. Hash: ${d.transaction_hash.substring(0, 12)}…`, "success");
+            showToast(`Capital Disbursed! ${formatMoney(d.amount)} sent to your bank. Hash: ${d.transaction_hash.substring(0, 12)}…`, "success");
         } else {
             showToast("Offer accepted! Financing approved for disbursement.", "success");
         }
@@ -982,7 +986,7 @@ function previewDownloadInvoice() {
     }
 
     document.getElementById("dl-inv-title").textContent   = `Invoice #${inv.invoice_number}`;
-    document.getElementById("dl-inv-details").textContent = `Amount: $${inv.amount.toLocaleString()} | Due: ${inv.due_date} | Buyer: ${inv.buyer_company_name || 'Global Retailers'}`;
+    document.getElementById("dl-inv-details").textContent = `Amount: ${formatMoney(inv.amount)} | Due: ${inv.due_date} | Buyer: ${inv.buyer_company_name || 'Global Retailers'}`;
     preview.style.display = "block";
     preview.dataset.invId = invId;
 }
@@ -1031,8 +1035,8 @@ function downloadInvoicePDF() {
         <table>
             <thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
             <tbody>
-                <tr><td>${inv.description || 'Goods &amp; Services as per Purchase Order'}</td><td>1</td><td>$${inv.amount.toLocaleString()}</td><td>$${inv.amount.toLocaleString()}</td></tr>
-                <tr class="total-row"><td colspan="3" style="text-align:right;"><strong>TOTAL DUE</strong></td><td><strong>$${inv.amount.toLocaleString()} USD</strong></td></tr>
+                <tr><td>${inv.description || 'Goods &amp; Services as per Purchase Order'}</td><td>1</td><td>${formatMoney(inv.amount)}</td><td>${formatMoney(inv.amount)}</td></tr>
+                <tr class="total-row"><td colspan="3" style="text-align:right;"><strong>TOTAL DUE</strong></td><td><strong>${formatMoney(inv.amount)} INR</strong></td></tr>
             </tbody>
         </table>
         <div style="margin-top:20px;background:#f0fdf4;border:1px solid #6ee7b7;border-radius:8px;padding:14px;font-size:12px;">
@@ -1086,7 +1090,7 @@ function renderFinanciersDirectoryList() {
                         ${fin.type || 'Commercial Banking Partner'} &bull; Speed: <strong>${fin.speed || 'Instant'}</strong>
                     </p>
                     <div style="font-size:0.75rem;margin-top:4px;color:var(--accent-emerald);">
-                        Liquidity Pool: <strong>$${(fin.liquidity_pool || 10000000).toLocaleString()}</strong>
+                        Liquidity Pool: <strong>${formatMoney(fin.liquidity_pool || 10000000)}</strong>
                     </div>
                 </div>
                 <div class="fin-rate">
@@ -1106,7 +1110,7 @@ async function openApplyFinancing(invId) {
     selectedInvoice = inv;
 
     document.getElementById("af-inv-num").textContent    = inv.invoice_number;
-    document.getElementById("af-inv-amount").textContent = `$${inv.amount.toLocaleString()}`;
+    document.getElementById("af-inv-amount").textContent = formatMoney(inv.amount);
     const statusEl = document.getElementById("af-inv-status");
     statusEl.textContent  = formatStatus(inv.status);
     statusEl.className    = `status-pill ${getStatusClass(inv.status)}`;
@@ -1221,7 +1225,7 @@ function renderBuyerPOs() {
             </div>
             <div class="inv-card-body">
                 <div>
-                    <div class="inv-amount">$${po.value.toLocaleString()}</div>
+                    <div class="inv-amount">${formatMoney(po.value)}</div>
                     <div class="inv-meta">Supplier: <strong>${po.supplierName}</strong></div>
                 </div>
                 <div class="inv-meta text-right">
@@ -1313,7 +1317,7 @@ function renderSupplierFinanciersGrid() {
                     </div>
                     <div style="text-align:right;">
                         <span style="color:var(--text-muted);display:block;font-size:0.7rem;">Liquidity Pool</span>
-                        <strong style="color:var(--accent-emerald);font-size:0.85rem;">$${(fin.liquidity_pool || 5000000).toLocaleString()}</strong>
+                        <strong style="color:var(--accent-emerald);font-size:0.85rem;">${formatMoney(fin.liquidity_pool || 5000000)}</strong>
                     </div>
                 </div>
                 <div style="width:100%;margin-top:10px;">
@@ -1449,13 +1453,13 @@ async function loadBuyerDashboardData() {
         const statSup = document.getElementById("b-stat-suppliers");
         if (statSup) statSup.textContent = `${suppliersList.length} Connected`;
         const statOrd = document.getElementById("b-stat-orders");
-        if (statOrd) statOrd.textContent = `$${totalOrdersVol.toLocaleString()} (${purchaseOrders.length} POs)`;
+        if (statOrd) statOrd.textContent = `${formatMoney(totalOrdersVol)} (${purchaseOrders.length} POs)`;
         const statReq = document.getElementById("b-stat-requests");
-        if (statReq) statReq.textContent = `$${pendingVol.toLocaleString()} (${pendingInvoices.length} Pending)`;
+        if (statReq) statReq.textContent = `${formatMoney(pendingVol)} (${pendingInvoices.length} Pending)`;
         const statApp = document.getElementById("b-stat-approved");
-        if (statApp) statApp.textContent = `$${approvedVol.toLocaleString()} (${approvedInvoices.length} Approved)`;
+        if (statApp) statApp.textContent = `${formatMoney(approvedVol)} (${approvedInvoices.length} Approved)`;
         const statBor = document.getElementById("b-stat-borrowed");
-        if (statBor) statBor.textContent = `$${borrowedVol.toLocaleString()} (${borrowedInvoices.length} Financed)`;
+        if (statBor) statBor.textContent = `${formatMoney(borrowedVol)} (${borrowedInvoices.length} Financed)`;
 
         // Update Tab Badges
         const countSup = document.getElementById("b-count-suppliers");
@@ -1517,7 +1521,7 @@ function renderBuyerPendingRequests(pending) {
             </div>
             <div class="inv-card-body">
                 <div>
-                    <div class="inv-amount">$${(inv.amount || 0).toLocaleString()}</div>
+                    <div class="inv-amount">${formatMoney(inv.amount || 0)}</div>
                     <div class="inv-meta">Supplier: <strong>${inv.supplier_company_name || 'Apex Industrial Ltd'}</strong></div>
                 </div>
                 <div class="inv-meta text-right">
@@ -1565,7 +1569,7 @@ function renderBuyerApprovedInvoices(approved) {
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:8px 0;">
                 <div>
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Invoice Amount</span>
-                    <strong style="font-size:1.1rem;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</strong>
+                    <strong style="font-size:1.1rem;color:var(--text-primary);">${formatMoney(inv.amount || 0)}</strong>
                 </div>
                 <div style="text-align:right;">
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Due Date</span>
@@ -1617,7 +1621,7 @@ function renderBuyerBorrowedInvoices(borrowed) {
                 <div style="background:var(--bg-card-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:12px 0;">
                     <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
                         <span style="color:var(--text-secondary);">Principal Payable:</span>
-                        <strong style="font-size:1.05rem;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</strong>
+                        <strong style="font-size:1.05rem;color:var(--text-primary);">${formatMoney(inv.amount || 0)}</strong>
                     </div>
                     <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
                         <span style="color:var(--text-secondary);">Maturity Due Date:</span>
@@ -1628,7 +1632,7 @@ function renderBuyerBorrowedInvoices(borrowed) {
                 ${isFinanced ? `
                     <button class="btn btn-success btn-full" style="padding:10px;justify-content:center;"
                             onclick="simulateSettlement('${inv.id}', ${inv.amount || 0})">
-                        <i class="fa-solid fa-money-bill-transfer"></i> Settle Payment to Financier ($${(inv.amount || 0).toLocaleString()})
+                        <i class="fa-solid fa-money-bill-transfer"></i> Settle Payment to Financier (${formatMoney(inv.amount || 0)})
                     </button>
                 ` : `
                     <div style="font-size:0.78rem;color:var(--accent-emerald);font-weight:700;display:flex;align-items:center;gap:6px;justify-content:center;padding:6px;">
@@ -1711,7 +1715,7 @@ async function simulateSettlement(invoiceId, amount) {
         });
         if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Settlement failed"); }
         const data = await res.json();
-        showToast(`Settlement Complete! Paid $${data.total_paid.toLocaleString()}. Yield returned to financier.`, "success");
+        showToast(`Settlement Complete! Paid ${formatMoney(data.total_paid)}. Yield returned to financier.`, "success");
         await loadBuyerDashboardData();
         await refreshStats();
     } catch (err) {
@@ -1756,7 +1760,7 @@ async function loadFinancierMatchedFeed() {
 
         // 3. Update Criteria Bar stats
         const demandEl = document.getElementById("fin-stat-demand");
-        if (demandEl) demandEl.textContent = `$${totalDemandVolume.toLocaleString()} (${countAll} Req${countAll === 1 ? '' : 's'})`;
+        if (demandEl) demandEl.textContent = `${formatMoney(totalDemandVolume)} (${countAll} Req${countAll === 1 ? '' : 's'})`;
 
         const countAllEl = document.getElementById("fin-count-all");
         if (countAllEl) countAllEl.textContent = countAll;
@@ -1897,22 +1901,22 @@ function renderFinancierSelectedSupplierProfile() {
             <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;padding-top:12px;border-top:1px solid var(--border);">
                 <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--border);">
                     <span style="font-size:0.72rem;color:var(--text-secondary);display:block;">Total Money Requested</span>
-                    <strong style="font-size:1.1rem;color:var(--text-primary);">$${totalRequestedVol.toLocaleString()}</strong>
+                    <strong style="font-size:1.1rem;color:var(--text-primary);">${formatMoney(totalRequestedVol)}</strong>
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">${supInvoices.length} Requested Invoices</span>
                 </div>
                 <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-emerald);">
                     <span style="font-size:0.72rem;color:var(--accent-emerald);display:block;">Buyer Accepted Money</span>
-                    <strong style="font-size:1.1rem;color:var(--accent-emerald);">$${buyerAcceptedVol.toLocaleString()}</strong>
+                    <strong style="font-size:1.1rem;color:var(--accent-emerald);">${formatMoney(buyerAcceptedVol)}</strong>
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Ready for Financier Bids</span>
                 </div>
                 <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-indigo);">
                     <span style="font-size:0.72rem;color:var(--accent-indigo);display:block;">Financed / Disbursed</span>
-                    <strong style="font-size:1.1rem;color:var(--accent-indigo);">$${financedVol.toLocaleString()}</strong>
+                    <strong style="font-size:1.1rem;color:var(--accent-indigo);">${formatMoney(financedVol)}</strong>
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Active Portfolio</span>
                 </div>
                 <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-amber);">
                     <span style="font-size:0.72rem;color:var(--accent-amber);display:block;">Pending / Disputed</span>
-                    <strong style="font-size:1.1rem;color:var(--accent-amber);">$${pendingVol.toLocaleString()}</strong>
+                    <strong style="font-size:1.1rem;color:var(--accent-amber);">${formatMoney(pendingVol)}</strong>
                     <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Under Buyer Review</span>
                 </div>
             </div>
@@ -1994,7 +1998,7 @@ function renderFinancierInvoicesFeed() {
                 </div>
                 <div class="inv-card-body">
                     <div>
-                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">${formatMoney(inv.amount || 0)}</div>
                         <div class="inv-meta" style="margin-top:2px;">
                             Supplier: <strong>${inv.supplier_company_name || 'Apex Industrial'}</strong> &bull; Buyer: <strong>${inv.buyer_company_name || 'Global Retailers'}</strong>
                         </div>
@@ -2047,7 +2051,7 @@ function renderFinancierOfferDesk(inv) {
                     </span>
                 </div>
                 <div class="inv-amount" style="font-size:1.2rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
-                    $${(inv.amount || 0).toLocaleString()}
+                    ${formatMoney(inv.amount || 0)}
                 </div>
             </div>
 
@@ -2088,11 +2092,11 @@ function renderFinancierOfferDesk(inv) {
                 <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.8rem;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                         <span>Principal Funded Amount:</span>
-                        <strong style="font-family:var(--font-mono);">$${inv.amount.toLocaleString()}</strong>
+                        <strong style="font-family:var(--font-mono);">${formatMoney(inv.amount)}</strong>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                         <span>Discount Fee Revenue Earned:</span>
-                        <strong style="color:var(--accent-emerald);font-family:var(--font-mono); font-weight:800;">+$${(inv.amount * 0.022).toLocaleString()} (2.2%)</strong>
+                        <strong style="color:var(--accent-emerald);font-family:var(--font-mono); font-weight:800;">+${formatMoney(inv.amount * 0.022)} (2.2%)</strong>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
                         <span>Supplier Disbursement Account:</span>
@@ -2157,18 +2161,18 @@ function renderFinancierOfferDesk(inv) {
             <div style="background:var(--accent-indigo-light);border:1.5px solid var(--accent-indigo-mid);padding:12px 16px;border-radius:8px;margin-bottom:14px;">
                 <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
                     <span style="color:var(--text-secondary);">Funded Capital:</span>
-                    <strong id="preview-funded-amount" style="font-family:var(--font-mono);">$${initialFunded.toLocaleString()}</strong>
+                    <strong id="preview-funded-amount" style="font-family:var(--font-mono);">${formatMoney(initialFunded)}</strong>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
                     <span style="color:var(--text-secondary);">Financier Discount Fee Earned:</span>
                     <strong id="preview-discount-revenue" style="color:var(--accent-emerald);font-family:var(--font-mono);">
-                        +$${(initialFunded * (defaultDiscount / 100)).toLocaleString()}
+                        +${formatMoney(initialFunded * (defaultDiscount / 100))}
                     </strong>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:0.9rem;padding-top:6px;border-top:1px dashed var(--accent-indigo-mid);">
                     <span style="font-weight:700;color:var(--accent-indigo);">Disbursement to Supplier:</span>
                     <strong id="preview-supplier-payout" style="font-size:1.15rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
-                        $${(initialFunded * (1.0 - defaultDiscount / 100)).toLocaleString()}
+                        ${formatMoney(initialFunded * (1.0 - defaultDiscount / 100))}
                     </strong>
                 </div>
             </div>
@@ -2209,9 +2213,9 @@ function updateCustomOfferedPreview(baseTotal) {
     const elFee = document.getElementById("preview-discount-revenue");
     const elPayout = document.getElementById("preview-supplier-payout");
 
-    if (elFunded) elFunded.textContent = `$${amount.toLocaleString()}`;
-    if (elFee) elFee.textContent = `+$${fee.toLocaleString()}`;
-    if (elPayout) elPayout.textContent = `$${payout.toLocaleString()}`;
+    if (elFunded) elFunded.textContent = formatMoney(amount);
+    if (elFee) elFee.textContent = `+${formatMoney(fee)}`;
+    if (elPayout) elPayout.textContent = formatMoney(payout);
 }
 
 async function submitFinancierCustomOffer(invId) {
@@ -2239,7 +2243,7 @@ async function submitFinancierCustomOffer(invId) {
             throw new Error(err.detail || "Failed to submit financing offer");
         }
 
-        showToast(`Financing offer extended! Amount: $${customAmt.toLocaleString()} at ${discount}% discount.`, "success");
+        showToast(`Financing offer extended! Amount: ${formatMoney(customAmt)} at ${discount}% discount.`, "success");
         await loadFinancierMatchedFeed();
         await refreshStats();
     } catch (err) {
@@ -2267,7 +2271,7 @@ async function loadAdminAuditLedger() {
             <tr>
                 <td style="font-family:var(--font-mono);font-size:0.78rem;">${tx.id.substring(0, 8)}…</td>
                 <td><span class="badge badge-ai">${tx.transaction_type}</span></td>
-                <td style="font-weight:700;color:var(--accent-emerald);font-family:var(--font-mono);">$${tx.amount.toLocaleString()}</td>
+                <td style="font-weight:700;color:var(--accent-emerald);font-family:var(--font-mono);">${formatMoney(tx.amount)}</td>
                 <td style="font-size:0.8rem;">${tx.sender_account}</td>
                 <td style="font-size:0.8rem;">${tx.recipient_account}</td>
                 <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);">${tx.transaction_hash.substring(0, 14)}…</td>
