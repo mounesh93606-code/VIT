@@ -301,13 +301,10 @@
         <section id="portal-supplier" class="portal-view active-view">
             <div class="portal-header">
                 <div>
-                    <h2><i class="fa-solid fa-industry"></i> Supplier Operations Center</h2>
-                    <p class="subtitle">Upload invoices, download PDFs, apply to financiers &amp; get AI-matched instant payouts.</p>
+                    <h2><i class="fa-solid fa-industry"></i> Supplier Operations &amp; Liquidity Hub</h2>
+                    <p class="subtitle">Accept buyer orders, generate verified invoices, monitor remaining balances, and match top financiers for instant cash.</p>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn btn-outline" onclick="openFinanciersDirectoryModal()">
-                        <i class="fa-solid fa-building-columns"></i> Financiers &amp; Banks
-                    </button>
                     <button class="btn btn-secondary" onclick="openDownloadModalDirect()">
                         <i class="fa-solid fa-file-arrow-down"></i> Download Invoice
                     </button>
@@ -317,49 +314,165 @@
                 </div>
             </div>
 
-            <div class="grid-2-cols">
-                <!-- Left: Invoice List -->
-                <div class="glass-panel">
-                    <div class="panel-header">
-                        <h3><i class="fa-solid fa-list-check"></i> Your Invoices &amp; Status</h3>
-                        <span class="badge" id="supplier-invoice-count">0 Invoices</span>
-                    </div>
-                    <div id="supplier-invoices-list" class="invoice-cards-container">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-file-invoice fa-2x"></i>
-                            <p>No invoices yet. Submit your first invoice to get started.</p>
+            <!-- Supplier Financial Balance & Liquidity KPI Bar -->
+            <div class="glass-panel mb-16" style="padding:14px 20px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));gap:16px;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon indigo"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                        <div>
+                            <span class="stat-label">Total Receivables Booked</span>
+                            <span class="stat-value" id="s-stat-receivables" style="font-size:1.1rem;font-weight:800;color:var(--text-primary);">$0 (0 Invoices)</span>
                         </div>
                     </div>
-                </div>
-
-                <!-- Right: AI Financing Offers -->
-                <div class="glass-panel">
-                    <div class="panel-header">
-                        <h3><i class="fa-solid fa-wand-magic-sparkles"></i> AI Multi-Factor Offer Matcher</h3>
-                        <span class="badge badge-ai"><i class="fa-solid fa-brain"></i> AI Active</span>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon emerald"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <div>
+                            <span class="stat-label">Funded Cash Received</span>
+                            <span class="stat-value" id="s-stat-funded" style="font-size:1.1rem;font-weight:800;color:var(--accent-emerald);">$0 (0 Financed)</span>
+                        </div>
                     </div>
-                    <div id="supplier-offers-panel">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-paper-plane fa-2x"></i>
-                            <p>Select a verified invoice on the left to inspect AI-ranked financing offers.</p>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon purple"><i class="fa-solid fa-scale-balanced"></i></div>
+                        <div>
+                            <span class="stat-label">Remaining Balance</span>
+                            <span class="stat-value" id="s-stat-unfunded" style="font-size:1.1rem;font-weight:800;color:var(--accent-indigo);">$0 Pending Cash</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon amber"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                        <div>
+                            <span class="stat-label">Awaiting Buyer Verification</span>
+                            <span class="stat-value" id="s-stat-verification" style="font-size:1.1rem;font-weight:800;color:var(--accent-amber);">$0 (0 Invoices)</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon rose"><i class="fa-solid fa-cart-arrow-down"></i></div>
+                        <div>
+                            <span class="stat-label">Incoming Buyer Requests</span>
+                            <span class="stat-value" id="s-stat-buyer-orders" style="font-size:1.1rem;font-weight:800;color:var(--accent-rose);">0 Requests</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Connected Financiers & Institutional Lenders (Supplier Hub Direct View) -->
-            <div class="glass-panel" style="margin-top:16px;">
-                <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
-                    <div>
-                        <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
-                            <i class="fa-solid fa-building-columns" style="color:var(--accent-indigo);"></i> Institutional Financiers &amp; Banking Network
-                        </h3>
-                        <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Browse verified institutional lenders and liquidity pools available to finance your approved invoices.</p>
+            <!-- Supplier Tab Navigation -->
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+                <button class="supplier-tab-btn active" id="btn-supplier-requests" onclick="switchSupplierTab('requests')">
+                    <i class="fa-solid fa-cart-arrow-down"></i> Buyer Requests &amp; Orders (<span id="s-count-requests">0</span>)
+                </button>
+                <button class="supplier-tab-btn" id="btn-supplier-invoices" onclick="switchSupplierTab('invoices')">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> Invoices &amp; Buyer Verification (<span id="s-count-invoices">0</span>)
+                </button>
+                <button class="supplier-tab-btn" id="btn-supplier-financing" onclick="switchSupplierTab('financing')">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Financing Applications &amp; Matches (<span id="s-count-financing">0</span>)
+                </button>
+                <button class="supplier-tab-btn" id="btn-supplier-financiers" onclick="switchSupplierTab('financiers')">
+                    <i class="fa-solid fa-building-columns"></i> Institutional Financiers Directory (<span id="s-count-financiers">0</span>)
+                </button>
+            </div>
+
+            <!-- PANE 1: Incoming Buyer Requests & Invoice Generation -->
+            <div id="pane-supplier-requests" class="supplier-tab-pane active">
+                <div class="glass-panel">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-cart-arrow-down" style="color:var(--accent-indigo);"></i> Incoming Component Requests &amp; Purchase Orders
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Review purchase orders placed by buyers. Click "Generate Invoice" to automatically create and submit invoices for verification.</p>
+                        </div>
+                        <span class="badge badge-info" id="supplier-buyer-requests-count-badge">0 Requests</span>
                     </div>
-                    <span class="badge badge-info" id="supplier-financiers-count-badge">0 Financiers</span>
+                    <div id="supplier-buyer-requests-list" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(340px, 1fr));gap:14px;">
+                        <!-- Dynamically populated -->
+                    </div>
                 </div>
-                <div id="supplier-financiers-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px;">
-                    <!-- Dynamically populated -->
+            </div>
+
+            <!-- PANE 2: Invoices & Buyer Verification Details -->
+            <div id="pane-supplier-invoices" class="supplier-tab-pane">
+                <div class="grid-2-cols">
+                    <!-- Left: Invoice List -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-list-check"></i> Your Invoices &amp; Verification Status</h3>
+                                <p class="subtitle" style="margin:2px 0 0;font-size:0.78rem;">Click an invoice to inspect verification audit trail.</p>
+                            </div>
+                            <span class="badge" id="supplier-invoice-count">0 Invoices</span>
+                        </div>
+                        <div id="supplier-invoices-list" class="invoice-cards-container" style="max-height:550px;overflow-y:auto;">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-file-invoice fa-2x"></i>
+                                <p>No invoices yet. Submit your first invoice to get started.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Invoice Verification & Ledger Audit Details -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-shield-halved"></i> Buyer Verification Audit &amp; Actions</h3>
+                            <span class="badge badge-ai"><i class="fa-solid fa-fingerprint"></i> On-Ledger Audit</span>
+                        </div>
+                        <div id="supplier-verification-audit-panel">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-magnifying-glass fa-2x"></i>
+                                <p>Select an invoice from the list on the left to inspect buyer verification status.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 3: Financing Applications & Top Matches -->
+            <div id="pane-supplier-financing" class="supplier-tab-pane">
+                <div class="grid-2-cols">
+                    <!-- Left: Invoices Eligible for Financing -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-receipt"></i> Verified Invoices Eligible for Funding</h3>
+                                <p class="subtitle" style="margin:2px 0 0;font-size:0.78rem;">Select a verified invoice to inspect AI-ranked financing bids.</p>
+                            </div>
+                            <span class="badge badge-success" id="supplier-verified-for-financing-count">0 Eligible</span>
+                        </div>
+                        <div id="supplier-financing-invoices-list" class="invoice-cards-container" style="max-height:550px;overflow-y:auto;">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- Right: AI Financing Offers & Matcher -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Multi-Factor Offer Matcher</h3>
+                            <span class="badge badge-ai"><i class="fa-solid fa-brain"></i> AI Active</span>
+                        </div>
+                        <div id="supplier-offers-panel">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-paper-plane fa-2x"></i>
+                                <p>Select a verified invoice on the left to inspect AI-ranked financing offers.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 4: Institutional Financiers Directory -->
+            <div id="pane-supplier-financiers" class="supplier-tab-pane">
+                <div class="glass-panel">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-building-columns" style="color:var(--accent-indigo);"></i> Institutional Financiers &amp; Banking Network
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Browse verified institutional lenders and liquidity pools available to finance your approved invoices.</p>
+                        </div>
+                        <span class="badge badge-info" id="supplier-financiers-count-badge">0 Financiers</span>
+                    </div>
+                    <div id="supplier-financiers-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px;">
+                        <!-- Dynamically populated -->
+                    </div>
                 </div>
             </div>
         </section>

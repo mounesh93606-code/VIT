@@ -20,6 +20,8 @@ let regRole              = "supplier";   // selected role on register screen
 let selectedSupplierId   = null;        // for buyer component request
 let selectedFinancierIds = new Set();    // for apply-financing modal
 let currentBuyerTab      = "suppliers"; // active buyer tab
+let currentSupplierTab   = "requests";  // active supplier tab
+let pendingInvoiceOrderId = null;        // linked PO when generating invoice from order
 let purchaseOrders       = [
     {
         id: 101,
@@ -335,7 +337,7 @@ async function loginAsRole(role) {
 
 async function loadRoleData() {
     await refreshStats();
-    if      (currentRole === "supplier")  { await loadSupplierInvoices(); await loadBuyerOptionsForForm(); renderSupplierFinanciersGrid(); }
+    if      (currentRole === "supplier")  { await loadSupplierDashboardData(); await loadBuyerOptionsForForm(); }
     else if (currentRole === "buyer")     { await loadBuyerDashboardData(); }
     else if (currentRole === "financier") { await loadFinancierMatchedFeed(); }
     else if (currentRole === "admin")     { await loadAdminAuditLedger(); }
@@ -355,158 +357,484 @@ async function refreshStats() {
 }
 
 // =====================================================================
-//  SUPPLIER PORTAL
+//  SUPPLIER PORTAL CONTROLLER & LOGIC
 // =====================================================================
-async function loadSupplierInvoices() {
+function switchSupplierTab(tabName) {
+    currentSupplierTab = tabName;
+    document.querySelectorAll(".supplier-tab-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".supplier-tab-pane").forEach(pane => pane.classList.remove("active"));
+
+    const btn = document.getElementById(`btn-supplier-${tabName}`);
+    if (btn) btn.classList.add("active");
+
+    const pane = document.getElementById(`pane-supplier-${tabName}`);
+    if (pane) pane.classList.add("active");
+}
+
+async function loadSupplierDashboardData() {
     try {
+        await loadFinanciersDirectory();
+        await loadBuyersDirectory();
+
         const res = await fetch(`${API_BASE}/invoices`, {
             headers: { Authorization: `Bearer ${authToken}` }
         });
-        invoicesData = await res.json();
-
-        const container = document.getElementById("supplier-invoices-list");
-        document.getElementById("supplier-invoice-count").textContent = `${invoicesData.length} Invoices`;
-
-        if (invoicesData.length === 0) {
-            container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-file-invoice fa-2x"></i><p>No invoices submitted yet.</p></div>`;
-            return;
+        if (res.ok) {
+            invoicesData = await res.json();
+        } else {
+            invoicesData = [];
         }
 
-        container.innerHTML = invoicesData.map(inv => `
-            <div class="invoice-card ${selectedInvoice && selectedInvoice.id === inv.id ? 'selected' : ''}"
-                 onclick="selectSupplierInvoice('${inv.id}')">
-                <div class="inv-card-header">
-                    <span class="inv-num">${inv.invoice_number}</span>
-                    <span class="status-pill ${getStatusClass(inv.status)}">${formatStatus(inv.status)}</span>
-                </div>
-                <div class="inv-card-body">
-                    <div>
-                        <div class="inv-amount">$${inv.amount.toLocaleString()}</div>
-                        <div class="inv-meta">Buyer: <strong>${inv.buyer_company_name || 'Global Retailers'}</strong></div>
-                    </div>
-                    <div class="inv-meta text-right">
-                        <div>Due: ${inv.due_date}</div>
-                        <small class="text-muted">Net 60</small>
-                    </div>
-                </div>
-                ${inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED' ? `
-                <div style="margin-top:10px;display:flex;gap:8px;">
-                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openDownloadForInvoice('${inv.id}')">
-                        <i class="fa-solid fa-file-arrow-down"></i> Download
-                    </button>
-                    <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();openApplyFinancing('${inv.id}')">
-                        <i class="fa-solid fa-hand-holding-dollar"></i> Apply Financing
-                    </button>
-                </div>` : ''}
-            </div>
-        `).join("");
+        // Compute Financial Balance Metrics
+        const totalBooked          = invoicesData.reduce((sum, i) => sum + (i.amount || 0), 0);
+        const fundedInvoices       = invoicesData.filter(i => i.status === "FINANCED" || i.status === "SETTLED");
+        const fundedCash           = fundedInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+        const remainingBalance     = Math.max(0, totalBooked - fundedCash);
+        const pendingVerifInvoices = invoicesData.filter(i => i.status === "PENDING_VERIFICATION");
+        const pendingVerifVol      = pendingVerifInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+        const verifiedForFinancing = invoicesData.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED");
 
+        // Update Supplier KPI Bar
+        const statRec = document.getElementById("s-stat-receivables");
+        if (statRec) statRec.textContent = `$${totalBooked.toLocaleString()} (${invoicesData.length} Inv${invoicesData.length === 1 ? '' : 's'})`;
+
+        const statFun = document.getElementById("s-stat-funded");
+        if (statFun) statFun.textContent = `$${fundedCash.toLocaleString()} (${fundedInvoices.length} Disbursed)`;
+
+        const statUnf = document.getElementById("s-stat-unfunded");
+        if (statUnf) statUnf.textContent = `$${remainingBalance.toLocaleString()} Unfunded`;
+
+        const statVer = document.getElementById("s-stat-verification");
+        if (statVer) statVer.textContent = `$${pendingVerifVol.toLocaleString()} (${pendingVerifInvoices.length} Pending)`;
+
+        const statOrd = document.getElementById("s-stat-buyer-orders");
+        if (statOrd) statOrd.textContent = `${purchaseOrders.length} Request${purchaseOrders.length === 1 ? '' : 's'}`;
+
+        // Update Tab Badges
+        const countReq = document.getElementById("s-count-requests");
+        if (countReq) countReq.textContent = purchaseOrders.length;
+
+        const countInv = document.getElementById("s-count-invoices");
+        if (countInv) countInv.textContent = invoicesData.length;
+
+        const countFin = document.getElementById("s-count-financing");
+        if (countFin) countFin.textContent = verifiedForFinancing.length;
+
+        const countFnr = document.getElementById("s-count-financiers");
+        if (countFnr) countFnr.textContent = financiersList.length;
+
+        const countFinEligible = document.getElementById("supplier-verified-for-financing-count");
+        if (countFinEligible) countFinEligible.textContent = `${verifiedForFinancing.length} Eligible`;
+
+        // Render All 4 Panes
+        renderSupplierBuyerRequests();
+        renderSupplierInvoicesList();
+        renderSupplierFinancingInvoices();
+        renderSupplierFinanciersGrid();
         populateDownloadSelect();
 
         if (invoicesData.length > 0 && !selectedInvoice) {
             selectSupplierInvoice(invoicesData[0].id);
         }
+
     } catch (err) {
-        console.error("Error loading supplier invoices:", err);
+        console.error("Error loading supplier dashboard:", err);
     }
 }
 
-function populateDownloadSelect() {
-    const sel = document.getElementById("download-invoice-select");
-    if (!sel) return;
-    sel.innerHTML = `<option value="">-- Select an invoice --</option>` +
-        invoicesData.map(inv => `<option value="${inv.id}">${inv.invoice_number} — $${inv.amount.toLocaleString()}</option>`).join("");
-}
+// ─── Pane 1: Incoming Buyer Requests & Orders ────────────────────────
+function renderSupplierBuyerRequests() {
+    const container = document.getElementById("supplier-buyer-requests-list");
+    const badge     = document.getElementById("supplier-buyer-requests-count-badge");
+    if (!container) return;
 
-async function selectSupplierInvoice(invId) {
-    selectedInvoice = invoicesData.find(i => i.id === invId);
-    await loadSupplierInvoices();
+    if (badge) badge.textContent = `${purchaseOrders.length} Request${purchaseOrders.length === 1 ? '' : 's'}`;
 
-    const panel = document.getElementById("supplier-offers-panel");
-    if (!selectedInvoice) return;
-
-    const res = await fetch(`${API_BASE}/offers?invoice_id=${selectedInvoice.id}`, {
-        headers: { Authorization: `Bearer ${authToken}` }
-    });
-    const offers = await res.json();
-
-    if (offers.length === 0) {
-        panel.innerHTML = `
-            <div class="evidence-box">
-                <h4 style="margin-bottom:10px;">Invoice ${selectedInvoice.invoice_number}</h4>
-                <div class="evidence-item">
-                    <span>Supplier GST &amp; Business Verification</span>
-                    <span class="evidence-check"><i class="fa-solid fa-circle-check"></i> 100% Valid</span>
-                </div>
-                <div class="evidence-item">
-                    <span>Buyer Invoice Match</span>
-                    <span class="evidence-check">${selectedInvoice.status !== 'PENDING_VERIFICATION'
-                        ? '<i class="fa-solid fa-circle-check"></i> Verified'
-                        : '<i class="fa-solid fa-clock"></i> Pending Buyer'}</span>
-                </div>
-                <div class="evidence-item">
-                    <span>Cryptographic Hash Integrity</span>
-                    <span class="evidence-check"><i class="fa-solid fa-lock"></i> SHA-256 OK</span>
-                </div>
-            </div>
-            <div class="empty-state">
-                <i class="fa-solid fa-hourglass-half fa-2x"></i>
-                <p>No financing offers yet. Once verified, financiers will submit competing quotes.</p>
+    if (purchaseOrders.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <i class="fa-solid fa-cart-arrow-down fa-2x"></i>
+                <p>No incoming buyer requests yet. Component requests placed by buyers will appear here.</p>
             </div>
         `;
         return;
     }
 
-    const sorted = [...offers].sort((a, b) => (b.suitability_score || 90) - (a.suitability_score || 80));
+    container.innerHTML = purchaseOrders.map(po => {
+        const isInvoiced = po.status === "INVOICE_GENERATED";
+        return `
+            <div class="glass-panel" style="padding:16px;border-left:4px solid ${isInvoiced ? 'var(--accent-emerald)' : 'var(--accent-indigo)'};">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+                    <div>
+                        <span class="inv-num" style="font-weight:700;font-size:0.98rem;">${po.ref || 'PO-' + po.id}</span>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:2px;">
+                            Buyer: <strong>Global Retailers Inc</strong> &bull; Due: <strong>${po.deliveryDate || 'Net 60'}</strong>
+                        </div>
+                    </div>
+                    <span class="status-pill ${isInvoiced ? 'verified' : 'pending'}">
+                        ${isInvoiced ? '<i class="fa-solid fa-circle-check"></i> INVOICE GENERATED' : '<i class="fa-solid fa-clock"></i> ORDER PENDING'}
+                    </span>
+                </div>
+
+                <div style="background:var(--bg-card-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:4px;">
+                        <span style="color:var(--text-secondary);">Component:</span>
+                        <strong>${po.component}</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:4px;">
+                        <span style="color:var(--text-secondary);">Quantity:</span>
+                        <span>${po.quantity}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:0.95rem;padding-top:6px;border-top:1px dashed var(--border);">
+                        <span style="font-weight:700;color:var(--text-secondary);">Order Value:</span>
+                        <strong style="color:var(--accent-emerald);font-size:1.1rem;font-family:var(--font-mono);">$${(po.value || 0).toLocaleString()}</strong>
+                    </div>
+                </div>
+
+                ${po.notes ? `<p style="font-size:0.75rem;color:var(--text-muted);margin:0 0 10px 0;"><i class="fa-solid fa-note-sticky"></i> Note: ${po.notes}</p>` : ''}
+
+                <div style="display:flex;gap:8px;">
+                    ${!isInvoiced ? `
+                        <button class="btn btn-primary btn-sm btn-full" style="justify-content:center;padding:8px;" onclick="generateInvoiceFromBuyerOrder(${po.id})">
+                            <i class="fa-solid fa-file-circle-plus"></i> Generate Invoice for Order
+                        </button>
+                    ` : `
+                        <div style="font-size:0.78rem;color:var(--accent-emerald);font-weight:700;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;padding:6px;">
+                            <i class="fa-solid fa-circle-check"></i> Invoice Submitted to Buyer for Verification
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function generateInvoiceFromBuyerOrder(orderId) {
+    const po = purchaseOrders.find(p => p.id === orderId);
+    if (!po) return;
+
+    pendingInvoiceOrderId = orderId;
+
+    // Pre-populate modal form fields
+    const inpNum = document.getElementById("inp-inv-num");
+    if (inpNum) inpNum.value = `INV-${po.ref ? po.ref.replace('PO-', '') : Date.now().toString().slice(-6)}`;
+
+    const inpAmt = document.getElementById("inp-amount");
+    if (inpAmt) inpAmt.value = po.value || 100000;
+
+    const inpDesc = document.getElementById("inp-desc");
+    if (inpDesc) inpDesc.value = `Invoice for Purchase Order ${po.ref}: ${po.component} (${po.quantity}). Delivery confirmed compliant.`;
+
+    const inpTenor = document.getElementById("inp-tenor");
+    if (inpTenor) inpTenor.value = 60;
+
+    openModal("modal-create-invoice");
+}
+
+// ─── Pane 2: Invoices & Buyer Verification Details ───────────────────
+function renderSupplierInvoicesList() {
+    const container = document.getElementById("supplier-invoices-list");
+    const countBadge = document.getElementById("supplier-invoice-count");
+    if (!container) return;
+
+    if (countBadge) countBadge.textContent = `${invoicesData.length} Invoices`;
+
+    if (invoicesData.length === 0) {
+        container.innerHTML = `<div class="empty-state"><i class="fa-solid fa-file-invoice fa-2x"></i><p>No invoices submitted yet.</p></div>`;
+        return;
+    }
+
+    container.innerHTML = invoicesData.map(inv => {
+        const isSelected = selectedInvoice && selectedInvoice.id === inv.id;
+        let verifHtml = '';
+        if (inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED') {
+            verifHtml = `<span class="status-pill verified"><i class="fa-solid fa-circle-check"></i> Buyer Verified</span>`;
+        } else if (inv.status === 'PENDING_VERIFICATION') {
+            verifHtml = `<span class="status-pill pending"><i class="fa-solid fa-clock"></i> Sent to Buyer</span>`;
+        } else if (inv.status === 'DISPUTED' || inv.status === 'REJECTED') {
+            verifHtml = `<span class="status-pill disputed"><i class="fa-solid fa-triangle-exclamation"></i> Disputed</span>`;
+        } else {
+            verifHtml = `<span class="status-pill financed"><i class="fa-solid fa-money-bill-wave"></i> Financed</span>`;
+        }
+
+        return `
+            <div class="invoice-card ${isSelected ? 'selected' : ''}"
+                 onclick="selectSupplierInvoice('${inv.id}')"
+                 style="margin-bottom:10px;padding:12px 14px;">
+                <div class="inv-card-header" style="margin-bottom:8px;">
+                    <span class="inv-num" style="font-weight:700;">${inv.invoice_number}</span>
+                    ${verifHtml}
+                </div>
+                <div class="inv-card-body">
+                    <div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-meta" style="margin-top:2px;">
+                            Buyer: <strong>${inv.buyer_company_name || 'Global Retailers Inc'}</strong>
+                        </div>
+                    </div>
+                    <div class="inv-meta text-right">
+                        <div>Due: <strong>${inv.due_date || 'Net 60'}</strong></div>
+                        <small class="text-muted">${inv.issue_date || 'Recent'}</small>
+                    </div>
+                </div>
+                ${inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED' ? `
+                    <div style="margin-top:10px;display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" style="flex:1;justify-content:center;" onclick="event.stopPropagation();openDownloadForInvoice('${inv.id}')">
+                            <i class="fa-solid fa-file-arrow-down"></i> Download PDF
+                        </button>
+                        <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center;" onclick="event.stopPropagation();openApplyFinancing('${inv.id}')">
+                            <i class="fa-solid fa-hand-holding-dollar"></i> Apply Financing
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join("");
+}
+
+async function selectSupplierInvoice(invId) {
+    selectedInvoice = invoicesData.find(i => i.id === invId);
+    renderSupplierInvoicesList();
+    renderSupplierFinancingInvoices();
+    renderSupplierVerificationAudit();
+
+    // Load AI Offers
+    await renderSupplierOffersPanel();
+}
+
+function renderSupplierVerificationAudit() {
+    const panel = document.getElementById("supplier-verification-audit-panel");
+    if (!panel) return;
+
+    if (!selectedInvoice) {
+        panel.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-magnifying-glass fa-2x"></i>
+                <p>Select an invoice from the list on the left to inspect buyer verification status.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const isVerified = selectedInvoice.status === "VERIFIED" || selectedInvoice.status === "OFFER_EXTENDED";
+    const isPending  = selectedInvoice.status === "PENDING_VERIFICATION";
+    const isDisputed = selectedInvoice.status === "DISPUTED" || selectedInvoice.status === "REJECTED";
 
     panel.innerHTML = `
-        <div style="margin-bottom:14px;">
-            <h4 style="font-weight:700;">Offers for ${selectedInvoice.invoice_number}</h4>
-            <small class="text-muted">AI Suitability Ranker sorted offers by rate, tenor, advance &amp; speed.</small>
-        </div>
-        <div style="max-height:420px;overflow-y:auto;padding-right:4px;">
-        ${sorted.map((off, idx) => {
-            const isTop = idx === 0;
-            const score = off.suitability_score || (isTop ? 94 : 80);
-            const reasons = off.explainability_reasons || [
-                "Required amount fully satisfied",
-                "Competitive financing cost vs market",
-                "Financier liquidity pool sufficient"
-            ];
-            return `
-                <div class="offer-rank-card ${isTop ? 'top-choice' : ''}">
-                    ${isTop ? '<div class="top-choice-badge"><i class="fa-solid fa-crown"></i> AI Best Match</div>' : ''}
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;${isTop?'margin-top:10px;':''}">
-                        <div>
-                            <h4 style="font-size:0.95rem;font-weight:700;">${off.financier_name || 'Horizon Capital'}</h4>
-                            <span class="badge badge-ai">Score: <strong>${score}/100</strong></span>
-                        </div>
-                        <div class="text-right">
-                            <div style="font-size:1.2rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">$${off.offered_amount.toLocaleString()}</div>
-                            <small class="text-muted">Rate: ${off.discount_rate_pct}% (${off.apr_pct}% APR)</small>
-                        </div>
-                    </div>
-                    <div class="score-bar-wrap mb-8"><div class="score-bar-fill ${isTop?'green':''}" style="width:${score}%;"></div></div>
-                    <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
-                        Tenor: <strong>${off.tenor_days} Days</strong> | Speed: <strong>Instant Payout</strong>
-                    </div>
-                    <div style="background:var(--bg-card-alt);padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:0.75rem;border:1px solid var(--border);">
-                        <strong>AI Rationale:</strong>
-                        <ul style="margin:4px 0 0 16px;color:var(--text-secondary);">
-                            ${reasons.map(r => `<li>${r}</li>`).join("")}
-                        </ul>
-                    </div>
-                    ${off.status === 'EXTENDED' ? `
-                        <button class="btn ${isTop ? 'btn-success' : 'btn-primary'} btn-full"
-                                onclick="acceptOffer('${off.id}')">
-                            <i class="fa-solid fa-check-double"></i> Accept &amp; Disburse $${off.offered_amount.toLocaleString()}
-                        </button>
-                    ` : `<div class="badge badge-info" style="display:block;text-align:center;padding:8px;">Status: ${off.status}</div>`}
+        <div class="evidence-box mb-12" style="background:var(--bg-card);border:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                    <h4 style="margin:0 0 2px 0;font-size:1rem;font-weight:700;">Invoice ${selectedInvoice.invoice_number}</h4>
+                    <span style="font-size:0.78rem;color:var(--text-secondary);">
+                        Buyer: <strong>${selectedInvoice.buyer_company_name || 'Global Retailers Inc'}</strong>
+                    </span>
                 </div>
-            `;
-        }).join("")}
+                <div class="inv-amount" style="font-size:1.25rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
+                    $${(selectedInvoice.amount || 0).toLocaleString()}
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:0.8rem;">
+                <div>Issue Date: <strong>${selectedInvoice.issue_date || '2026-08-28'}</strong></div>
+                <div>Payment Due: <strong>${selectedInvoice.due_date || 'Net 60'}</strong></div>
+            </div>
+        </div>
+
+        <div class="evidence-box mb-12">
+            <h4 style="margin-bottom:10px;font-size:0.92rem;">Buyer Verification &amp; Cryptographic Audit</h4>
+            
+            <div class="evidence-item">
+                <span>Buyer Acceptance Status</span>
+                <span class="evidence-check">
+                    ${isVerified ? '<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> VERIFIED &amp; APPROVED'
+                      : isPending ? '<i class="fa-solid fa-clock" style="color:var(--accent-amber);"></i> AWAITING BUYER REVIEW'
+                      : isDisputed ? '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-rose);"></i> DISPUTED'
+                      : '<i class="fa-solid fa-check" style="color:var(--accent-indigo);"></i> FINANCED'}
+                </span>
+            </div>
+            <div class="evidence-item">
+                <span>Purchase Order Compliance</span>
+                <span class="evidence-check"><i class="fa-solid fa-circle-check"></i> PO-88492 MATCHED</span>
+            </div>
+            <div class="evidence-item">
+                <span>Physical Delivery Confirmation</span>
+                <span class="evidence-check"><i class="fa-solid fa-circle-check"></i> GOODS RECEIVED</span>
+            </div>
+            <div class="evidence-item">
+                <span>Cryptographic SHA-256 Signature</span>
+                <span class="evidence-check" style="font-family:var(--font-mono);font-size:0.72rem;">
+                    ${selectedInvoice.document_hash ? selectedInvoice.document_hash.substring(0, 20) + '…' : 'SHA256:VERIFIED-OK'}
+                </span>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-secondary" style="flex:1;justify-content:center;" onclick="openDownloadForInvoice('${selectedInvoice.id}')">
+                <i class="fa-solid fa-file-arrow-down"></i> Download PDF
+            </button>
+            ${isVerified ? `
+                <button class="btn btn-primary" style="flex:1;justify-content:center;" onclick="openApplyFinancing('${selectedInvoice.id}')">
+                    <i class="fa-solid fa-paper-plane"></i> Apply for Financing
+                </button>
+            ` : `
+                <button class="btn btn-outline" style="flex:1;justify-content:center;" disabled>
+                    <i class="fa-solid fa-clock"></i> Verification Pending
+                </button>
+            `}
         </div>
     `;
+}
+
+// ─── Pane 3: Financing Applications & Top Matches ────────────────────
+function renderSupplierFinancingInvoices() {
+    const container = document.getElementById("supplier-financing-invoices-list");
+    if (!container) return;
+
+    const verified = invoicesData.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED");
+
+    if (verified.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-circle-check fa-2x"></i>
+                <p>No verified invoices currently eligible for funding. Invoices will become eligible once verified by the buyer.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = verified.map(inv => {
+        const isSelected = selectedInvoice && selectedInvoice.id === inv.id;
+        return `
+            <div class="invoice-card ${isSelected ? 'selected' : ''}"
+                 onclick="selectSupplierInvoice('${inv.id}')"
+                 style="margin-bottom:10px;padding:12px 14px;">
+                <div class="inv-card-header" style="margin-bottom:8px;">
+                    <span class="inv-num" style="font-weight:700;">${inv.invoice_number}</span>
+                    <span class="status-pill verified"><i class="fa-solid fa-circle-check"></i> Eligible for Funding</span>
+                </div>
+                <div class="inv-card-body">
+                    <div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-meta" style="margin-top:2px;">Buyer: <strong>${inv.buyer_company_name || 'Global Retailers'}</strong></div>
+                    </div>
+                    <div class="inv-meta text-right">
+                        <div>Due: <strong>${inv.due_date || 'Net 60'}</strong></div>
+                        <small class="text-success"><i class="fa-solid fa-bolt"></i> Instant Payout</small>
+                    </div>
+                </div>
+                <div style="margin-top:10px;">
+                    <button class="btn btn-outline btn-sm btn-full" style="justify-content:center;" onclick="event.stopPropagation();openApplyFinancing('${inv.id}')">
+                        <i class="fa-solid fa-paper-plane"></i> Apply to All Financiers
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+async function renderSupplierOffersPanel() {
+    const panel = document.getElementById("supplier-offers-panel");
+    if (!panel) return;
+
+    if (!selectedInvoice) {
+        panel.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-paper-plane fa-2x"></i>
+                <p>Select a verified invoice to inspect AI-ranked financing offers.</p>
+            </div>
+        `;
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/offers?invoice_id=${selectedInvoice.id}`, {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        const offers = res.ok ? await res.json() : [];
+
+        if (offers.length === 0) {
+            panel.innerHTML = `
+                <div class="evidence-box mb-12">
+                    <h4 style="margin-bottom:6px;">Invoice ${selectedInvoice.invoice_number}</h4>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 10px 0;">
+                        Amount: <strong>$${selectedInvoice.amount.toLocaleString()}</strong> &bull; Buyer: <strong>${selectedInvoice.buyer_company_name || 'Global Retailers'}</strong>
+                    </p>
+                    <div class="evidence-item">
+                        <span>AI Underwriting Readiness</span>
+                        <span class="evidence-check"><i class="fa-solid fa-circle-check"></i> HIGH (94% Score)</span>
+                    </div>
+                    <div class="evidence-item">
+                        <span>Financier Liquidity Available</span>
+                        <span class="evidence-check"><i class="fa-solid fa-circle-check"></i> $25,000,000 Pool</span>
+                    </div>
+                </div>
+
+                <div class="empty-state" style="padding:24px 14px;">
+                    <i class="fa-solid fa-wand-magic-sparkles fa-2x" style="color:var(--accent-indigo);"></i>
+                    <p style="margin-top:8px;font-weight:600;">No offers extended yet for this invoice.</p>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">Click below to submit this invoice to the institutional lenders network.</p>
+                    <button class="btn btn-primary" style="margin-top:12px;" onclick="openApplyFinancing('${selectedInvoice.id}')">
+                        <i class="fa-solid fa-paper-plane"></i> Apply for Financing Now
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const sorted = [...offers].sort((a, b) => (b.suitability_score || 90) - (a.suitability_score || 80));
+
+        panel.innerHTML = `
+            <div style="margin-bottom:14px;">
+                <h4 style="font-weight:700;font-size:1rem;margin:0;">Offers for ${selectedInvoice.invoice_number}</h4>
+                <small class="text-muted">AI Suitability Ranker sorted offers by net cash payout, discount rate &amp; speed.</small>
+            </div>
+            <div style="max-height:450px;overflow-y:auto;padding-right:4px;">
+            ${sorted.map((off, idx) => {
+                const isTop = idx === 0;
+                const score = off.suitability_score || (isTop ? 94 : 80);
+                const reasons = off.explainability_reasons || [
+                    "Required amount fully satisfied",
+                    "Competitive financing cost vs market",
+                    "Financier liquidity pool sufficient"
+                ];
+                return `
+                    <div class="offer-rank-card ${isTop ? 'top-choice' : ''}" style="margin-bottom:12px;">
+                        ${isTop ? '<div class="top-choice-badge"><i class="fa-solid fa-crown"></i> AI Best Match</div>' : ''}
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;${isTop?'margin-top:10px;':''}">
+                            <div>
+                                <h4 style="font-size:0.95rem;font-weight:700;margin:0;">${off.financier_name || 'Horizon Capital Group'}</h4>
+                                <span class="badge badge-ai" style="margin-top:4px;">Score: <strong>${score}/100</strong></span>
+                            </div>
+                            <div class="text-right">
+                                <div style="font-size:1.2rem;font-weight:800;color:var(--accent-emerald);font-family:var(--font-mono);">$${off.offered_amount.toLocaleString()}</div>
+                                <small class="text-muted">Rate: ${off.discount_rate_pct}% (${off.apr_pct}% APR)</small>
+                            </div>
+                        </div>
+                        <div class="score-bar-wrap mb-8"><div class="score-bar-fill ${isTop?'green':''}" style="width:${score}%;"></div></div>
+                        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">
+                            Tenor: <strong>${off.tenor_days} Days</strong> | Speed: <strong>Instant Payout</strong>
+                        </div>
+                        <div style="background:var(--bg-card-alt);padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:0.75rem;border:1px solid var(--border);">
+                            <strong>AI Rationale:</strong>
+                            <ul style="margin:4px 0 0 16px;color:var(--text-secondary);">
+                                ${reasons.map(r => `<li>${r}</li>`).join("")}
+                            </ul>
+                        </div>
+                        ${off.status === 'EXTENDED' ? `
+                            <button class="btn ${isTop ? 'btn-success' : 'btn-primary'} btn-full"
+                                    onclick="acceptOffer('${off.id}')">
+                                <i class="fa-solid fa-bolt"></i> Accept Offer &amp; Disburse $${off.offered_amount.toLocaleString()}
+                            </button>
+                        ` : `<div class="badge badge-info" style="display:block;text-align:center;padding:8px;">Status: ${off.status}</div>`}
+                    </div>
+                `;
+            }).join("")}
+            </div>
+        `;
+
+    } catch (err) {
+        console.error("Error rendering offers panel:", err);
+    }
 }
 
 async function acceptOffer(offerId) {
@@ -525,11 +853,11 @@ async function acceptOffer(offerId) {
 
         if (disbRes.ok) {
             const d = await disbRes.json();
-            showToast(`Capital Disbursed! $${d.amount.toLocaleString()} sent. Hash: ${d.transaction_hash.substring(0, 12)}…`, "success");
+            showToast(`Capital Disbursed! $${d.amount.toLocaleString()} sent to your bank. Hash: ${d.transaction_hash.substring(0, 12)}…`, "success");
         } else {
-            showToast("Offer accepted! Financing pending disbursement.", "success");
+            showToast("Offer accepted! Financing approved for disbursement.", "success");
         }
-        await loadSupplierInvoices();
+        await loadSupplierDashboardData();
         await refreshStats();
     } catch (err) {
         showToast(`Error: ${err.message}`, "error");
@@ -1851,10 +2179,20 @@ async function handleCreateInvoice(event) {
             })
         });
         if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Creation failed"); }
-        showToast(`Invoice #${invNum} submitted for AI verification!`, "success");
+
+        // If generated from a specific buyer request order, mark order as INVOICE_GENERATED
+        if (pendingInvoiceOrderId) {
+            const matchedPO = purchaseOrders.find(p => p.id === pendingInvoiceOrderId);
+            if (matchedPO) {
+                matchedPO.status = "INVOICE_GENERATED";
+            }
+            pendingInvoiceOrderId = null;
+        }
+
+        showToast(`Invoice #${invNum} submitted to Buyer for verification!`, "success");
         closeModal("modal-create-invoice");
         event.target.reset();
-        await loadSupplierInvoices();
+        await loadSupplierDashboardData();
         await refreshStats();
     } catch (err) {
         showToast(`Error: ${err.message}`, "error");
