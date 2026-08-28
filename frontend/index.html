@@ -368,70 +368,183 @@
         <section id="portal-buyer" class="portal-view">
             <div class="portal-header">
                 <div>
-                    <h2><i class="fa-solid fa-cart-shopping"></i> Buyer Hub</h2>
-                    <p class="subtitle">Request components from suppliers, verify invoices &amp; manage settlements.</p>
+                    <h2><i class="fa-solid fa-cart-shopping"></i> Buyer Hub &amp; Procurement Desk</h2>
+                    <p class="subtitle">Order components from suppliers, track purchase orders, verify supplier invoices, and manage financed obligations.</p>
                 </div>
                 <button class="btn btn-primary" onclick="openComponentRequestModal()">
                     <i class="fa-solid fa-boxes-stacked"></i> Request Components
                 </button>
             </div>
 
-            <!-- Connected Suppliers Directory on Buyer Hub -->
-            <div class="glass-panel mb-16">
-                <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
-                    <div>
-                        <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
-                            <i class="fa-solid fa-industry" style="color:var(--accent-indigo);"></i> Approved &amp; Connected Suppliers Directory
-                        </h3>
-                        <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Select a registered supplier to request components, order raw materials, or initiate purchase orders.</p>
+            <!-- Buyer Operations KPI Bar -->
+            <div class="glass-panel mb-16" style="padding:14px 20px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));gap:16px;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon indigo"><i class="fa-solid fa-industry"></i></div>
+                        <div>
+                            <span class="stat-label">Connected Suppliers</span>
+                            <span class="stat-value" id="b-stat-suppliers" style="font-size:1.1rem;font-weight:800;color:var(--accent-indigo);">0 Suppliers</span>
+                        </div>
                     </div>
-                    <span class="badge badge-info" id="buyer-suppliers-count-badge">0 Suppliers</span>
-                </div>
-                <div id="buyer-suppliers-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px;">
-                    <!-- Dynamically populated -->
-                </div>
-            </div>
-
-            <!-- Purchase Orders / Component Requests -->
-            <div class="request-section mb-16">
-                <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
-                    <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
-                        <i class="fa-solid fa-truck-fast" style="color:var(--accent-indigo);"></i> Active Purchase Orders
-                    </h3>
-                    <span class="badge badge-info" id="po-count-badge">0 POs</span>
-                </div>
-                <div id="buyer-po-list" class="invoice-cards-container">
-                    <div class="empty-state">
-                        <i class="fa-solid fa-boxes-stacked fa-2x"></i>
-                        <p>No purchase orders placed yet. Click "Request Components" to place an order with a supplier.</p>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon purple"><i class="fa-solid fa-truck-fast"></i></div>
+                        <div>
+                            <span class="stat-label">My Orders</span>
+                            <span class="stat-value" id="b-stat-orders" style="font-size:1.1rem;font-weight:800;color:var(--accent-indigo);">$0 (0 POs)</span>
+                        </div>
                     </div>
-                </div>
-            </div>
-
-            <div class="grid-2-cols">
-                <!-- Pending Invoice Approvals -->
-                <div class="glass-panel">
-                    <div class="panel-header">
-                        <h3><i class="fa-solid fa-clock-rotate-left"></i> Invoices Awaiting Approval</h3>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon amber"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                        <div>
+                            <span class="stat-label">Verification Requests</span>
+                            <span class="stat-value" id="b-stat-requests" style="font-size:1.1rem;font-weight:800;color:var(--accent-amber);">$0 (0 Pending)</span>
+                        </div>
                     </div>
-                    <div id="buyer-pending-list" class="invoice-cards-container">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-inbox fa-2x"></i>
-                            <p>No invoices pending buyer approval.</p>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon emerald"><i class="fa-solid fa-circle-check"></i></div>
+                        <div>
+                            <span class="stat-label">Approved Invoices</span>
+                            <span class="stat-value" id="b-stat-approved" style="font-size:1.1rem;font-weight:800;color:var(--accent-emerald);">$0 (0 Verified)</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon rose"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                        <div>
+                            <span class="stat-label">If Borrowed (Financed)</span>
+                            <span class="stat-value" id="b-stat-borrowed" style="font-size:1.1rem;font-weight:800;color:var(--accent-rose);">$0 (0 Financed)</span>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Verification Detail -->
+            <!-- Buyer Tab Navigation -->
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+                <button class="buyer-tab-btn active" id="btn-buyer-suppliers" onclick="switchBuyerTab('suppliers')">
+                    <i class="fa-solid fa-industry"></i> List of Suppliers (<span id="b-count-suppliers">0</span>)
+                </button>
+                <button class="buyer-tab-btn" id="btn-buyer-orders" onclick="switchBuyerTab('orders')">
+                    <i class="fa-solid fa-truck-fast"></i> My Orders (<span id="b-count-orders">0</span>)
+                </button>
+                <button class="buyer-tab-btn" id="btn-buyer-requests" onclick="switchBuyerTab('requests')">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Verification Requests (<span id="b-count-requests">0</span>)
+                </button>
+                <button class="buyer-tab-btn" id="btn-buyer-approved" onclick="switchBuyerTab('approved')">
+                    <i class="fa-solid fa-circle-check"></i> Approved Invoices (<span id="b-count-approved">0</span>)
+                </button>
+                <button class="buyer-tab-btn" id="btn-buyer-borrowed" onclick="switchBuyerTab('borrowed')">
+                    <i class="fa-solid fa-hand-holding-dollar"></i> If Borrowed / Financed (<span id="b-count-borrowed">0</span>)
+                </button>
+            </div>
+
+            <!-- PANE 1: List of Suppliers -->
+            <div id="pane-buyer-suppliers" class="buyer-tab-pane active">
                 <div class="glass-panel">
-                    <div class="panel-header">
-                        <h3><i class="fa-solid fa-shield-halved"></i> Verification Evidence Matrix</h3>
-                    </div>
-                    <div id="buyer-verification-detail">
-                        <div class="empty-state">
-                            <i class="fa-solid fa-magnifying-glass fa-2x"></i>
-                            <p>Select an invoice from the pending queue to perform evidence verification.</p>
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-industry" style="color:var(--accent-indigo);"></i> Approved &amp; Connected Suppliers Directory
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Browse verified component manufacturers and click "Request Components" to initiate purchase orders.</p>
                         </div>
+                        <span class="badge badge-info" id="buyer-suppliers-count-badge">0 Suppliers</span>
+                    </div>
+                    <div id="buyer-suppliers-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:12px;">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 2: My Orders (Purchase Orders) -->
+            <div id="pane-buyer-orders" class="buyer-tab-pane">
+                <div class="glass-panel">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-truck-fast" style="color:var(--accent-indigo);"></i> My Orders &amp; Purchase Orders (POs)
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Track component orders placed with suppliers and delivery schedules.</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="openComponentRequestModal()">
+                            <i class="fa-solid fa-plus"></i> New Order
+                        </button>
+                    </div>
+                    <div id="buyer-po-list" class="invoice-cards-container">
+                        <div class="empty-state">
+                            <i class="fa-solid fa-boxes-stacked fa-2x"></i>
+                            <p>No purchase orders placed yet. Click "Request Components" to place an order with a supplier.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 3: Requests for Verification of Invoice -->
+            <div id="pane-buyer-requests" class="buyer-tab-pane">
+                <div class="grid-2-cols">
+                    <!-- Left: Pending Invoices Queue -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <div>
+                                <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-clock-rotate-left"></i> Invoices Awaiting Buyer Approval</h3>
+                                <p class="subtitle" style="margin:2px 0 0;font-size:0.78rem;">Select an invoice to review physical receipt and approve.</p>
+                            </div>
+                            <span class="badge" id="buyer-pending-count-badge">0 Pending</span>
+                        </div>
+                        <div id="buyer-pending-list" class="invoice-cards-container" style="max-height:550px;overflow-y:auto;">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-inbox fa-2x"></i>
+                                <p>No invoices pending buyer approval.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Verification Evidence Matrix -->
+                    <div class="glass-panel">
+                        <div class="panel-header">
+                            <h3 style="font-size:0.97rem;font-weight:700;"><i class="fa-solid fa-shield-halved"></i> Verification Evidence Matrix</h3>
+                            <span class="badge badge-ai"><i class="fa-solid fa-fingerprint"></i> SHA-256 Validated</span>
+                        </div>
+                        <div id="buyer-verification-detail">
+                            <div class="empty-state">
+                                <i class="fa-solid fa-magnifying-glass fa-2x"></i>
+                                <p>Select an invoice from the queue on the left to perform evidence verification.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 4: Approved Invoices -->
+            <div id="pane-buyer-approved" class="buyer-tab-pane">
+                <div class="glass-panel">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> Approved &amp; Verified Invoices
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Invoices verified by buyer, authenticated on-ledger, and open for supplier financing.</p>
+                        </div>
+                        <span class="badge badge-success" id="buyer-approved-count-badge">0 Approved</span>
+                    </div>
+                    <div id="buyer-approved-list" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:12px;">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANE 5: If Borrowed (Financed Obligations & Settlements) -->
+            <div id="pane-buyer-borrowed" class="buyer-tab-pane">
+                <div class="glass-panel">
+                    <div class="panel-header" style="border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:14px;">
+                        <div>
+                            <h3 style="font-size:0.97rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <i class="fa-solid fa-hand-holding-dollar" style="color:var(--accent-rose);"></i> If Borrowed — Financed Receivables &amp; Maturity Settlements
+                            </h3>
+                            <p class="subtitle" style="margin:2px 0 0;font-size:0.8rem;">Invoices financed by partner liquidity pools. Settle payments upon invoice maturity date.</p>
+                        </div>
+                        <span class="badge badge-ai" id="buyer-borrowed-count-badge">0 Financed</span>
+                    </div>
+                    <div id="buyer-borrowed-list" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:14px;">
+                        <!-- Dynamically populated -->
                     </div>
                 </div>
             </div>
