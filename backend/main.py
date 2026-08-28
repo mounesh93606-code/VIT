@@ -232,10 +232,35 @@ def evaluate_risk(
     ai_rate_limiter.check_rate_limit(request)
     return risk_agent.evaluate_risk(supplier_score, buyer_rating, amount, tenor_days)
 
-# Mount static frontend directory for root UI access
+# Mount static frontend directory and serve explicit routes with guaranteed MIME types
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="text/html; charset=utf-8")
+    return Response(content="SCF Nexus Frontend Not Found", status_code=404)
+
+@app.get("/style.css", include_in_schema=False)
+def serve_css():
+    css_path = os.path.join(frontend_dir, "style.css")
+    if os.path.exists(css_path):
+        with open(css_path, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="text/css; charset=utf-8")
+    return Response(content="/* CSS Not Found */", status_code=404, media_type="text/css")
+
+@app.get("/app.js", include_in_schema=False)
+def serve_js():
+    js_path = os.path.join(frontend_dir, "app.js")
+    if os.path.exists(js_path):
+        with open(js_path, "r", encoding="utf-8") as f:
+            return Response(content=f.read(), media_type="application/javascript; charset=utf-8")
+    return Response(content="// JS Not Found", status_code=404, media_type="application/javascript")
+
 if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
 if __name__ == "__main__":
     import uvicorn
