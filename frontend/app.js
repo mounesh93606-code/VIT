@@ -1771,46 +1771,73 @@ function renderFinancierSelectedSupplierProfile() {
     }
 
     const sup = suppliersList.find(s => s.id === financierSupplierFilter || s.name === financierSupplierFilter || s.company_name === financierSupplierFilter)
-        || { name: financierSupplierFilter, company_name: financierSupplierFilter, credit_rating: "BBB", risk_score: 25.0, tax_id: "TAX-SUPPLIER" };
+        || { name: financierSupplierFilter, company_name: financierSupplierFilter, credit_rating: "AA", risk_score: 18.5, tax_id: "TAX-SUP-APEX-001", sector: "Industrial Components" };
 
     const supInvoices = financierInvoicesCache.filter(i => 
         i.supplier_id === sup.id || i.supplier_company_name === sup.name || i.supplier_company_name === sup.company_name
     );
-    const supTotalVol = supInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
 
-    if (tag) tag.textContent = `Filtered: ${sup.name || sup.company_name}`;
+    const totalRequestedVol = supInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+    const buyerAcceptedVol  = supInvoices.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED").reduce((sum, i) => sum + (i.amount || 0), 0);
+    const financedVol       = supInvoices.filter(i => i.status === "FINANCED" || i.status === "SETTLED").reduce((sum, i) => sum + (i.amount || 0), 0);
+    const pendingVol        = supInvoices.filter(i => i.status === "PENDING_VERIFICATION" || i.status === "DISPUTED").reduce((sum, i) => sum + (i.amount || 0), 0);
+
+    if (tag) tag.textContent = `Supplier Profile: ${sup.name || sup.company_name}`;
 
     box.style.display = "block";
     box.innerHTML = `
-        <div class="glass-panel" style="border-left:4px solid var(--accent-indigo);padding:14px 18px;background:var(--accent-indigo-light);">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-                <div style="display:flex;align-items:center;gap:12px;">
-                    <div class="supplier-avatar" style="width:48px;height:48px;font-size:1.2rem;">
+        <div class="glass-panel mb-16" style="border-left:4px solid var(--accent-indigo);padding:16px 20px;background:var(--accent-indigo-light);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div class="supplier-avatar" style="width:52px;height:52px;font-size:1.3rem;">
                         ${(sup.name || sup.company_name || 'S').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                        <h3 style="font-size:1rem;font-weight:700;margin:0;">${sup.name || sup.company_name}</h3>
-                        <p style="margin:2px 0 0;font-size:0.78rem;color:var(--text-secondary);">
-                            Tax ID: <strong>${sup.tax_id || 'VERIFIED'}</strong> &bull; Sector: ${sup.sector || 'Manufacturing & Components'}
+                        <h3 style="font-size:1.1rem;font-weight:700;margin:0;color:var(--text-primary);">
+                            ${sup.name || sup.company_name}
+                        </h3>
+                        <p style="margin:2px 0 0;font-size:0.8rem;color:var(--text-secondary);">
+                            Tax ID: <strong>${sup.tax_id || 'TAX-VERIFIED'}</strong> &bull; Sector: ${sup.sector || 'Manufacturing & Industrial Parts'}
                         </p>
                     </div>
                 </div>
-                <div style="display:flex;gap:16px;align-items:center;">
+
+                <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;">
                     <div style="text-align:right;">
                         <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Credit Rating</span>
-                        <strong style="color:var(--accent-indigo);font-size:0.95rem;">${sup.credit_rating || 'BBB'}</strong>
+                        <strong style="color:var(--accent-indigo);font-size:1rem;">${sup.credit_rating || 'AA'}</strong>
                     </div>
                     <div style="text-align:right;">
-                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Risk Profile</span>
-                        <strong style="color:var(--accent-emerald);font-size:0.95rem;">${sup.risk_score || 22.5}% LOW</strong>
-                    </div>
-                    <div style="text-align:right;">
-                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Supplier Requests</span>
-                        <strong style="font-size:0.95rem;">$${supTotalVol.toLocaleString()} (${supInvoices.length})</strong>
+                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Risk Score</span>
+                        <strong style="color:var(--accent-emerald);font-size:1rem;">${sup.risk_score || 18.5}% LOW</strong>
                     </div>
                     <button class="btn btn-secondary btn-sm" onclick="setFinancierSupplierFilter(null)">
-                        <i class="fa-solid fa-xmark"></i> Clear Filter
+                        <i class="fa-solid fa-xmark"></i> Clear Supplier Filter
                     </button>
+                </div>
+            </div>
+
+            <!-- Supplier Money Requested Summary Cards Grid -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;padding-top:12px;border-top:1px solid var(--border);">
+                <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--border);">
+                    <span style="font-size:0.72rem;color:var(--text-secondary);display:block;">Total Money Requested</span>
+                    <strong style="font-size:1.1rem;color:var(--text-primary);">$${totalRequestedVol.toLocaleString()}</strong>
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">${supInvoices.length} Requested Invoices</span>
+                </div>
+                <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-emerald);">
+                    <span style="font-size:0.72rem;color:var(--accent-emerald);display:block;">Buyer Accepted Money</span>
+                    <strong style="font-size:1.1rem;color:var(--accent-emerald);">$${buyerAcceptedVol.toLocaleString()}</strong>
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Ready for Financier Bids</span>
+                </div>
+                <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-indigo);">
+                    <span style="font-size:0.72rem;color:var(--accent-indigo);display:block;">Financed / Disbursed</span>
+                    <strong style="font-size:1.1rem;color:var(--accent-indigo);">$${financedVol.toLocaleString()}</strong>
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Active Portfolio</span>
+                </div>
+                <div style="background:var(--bg-card);padding:10px 12px;border-radius:8px;border:1px solid var(--accent-amber);">
+                    <span style="font-size:0.72rem;color:var(--accent-amber);display:block;">Pending / Disputed</span>
+                    <strong style="font-size:1.1rem;color:var(--accent-amber);">$${pendingVol.toLocaleString()}</strong>
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;margin-top:2px;">Under Buyer Review</span>
                 </div>
             </div>
         </div>
@@ -1930,6 +1957,7 @@ function renderFinancierOfferDesk(inv) {
 
     const defaultDiscount = 2.2;
     const initialFunded = inv.amount;
+    const isFinancedOrSettled = inv.status === 'FINANCED' || inv.status === 'SETTLED';
 
     calc.innerHTML = `
         <div class="evidence-box mb-12" style="background:var(--bg-card);border:1px solid var(--border);">
@@ -1952,12 +1980,12 @@ function renderFinancierOfferDesk(inv) {
                     <div style="font-size:0.7rem;color:var(--text-secondary);">Buyer Acceptance</div>
                     <div style="font-weight:700;font-size:0.8rem;margin-top:2px;">
                         ${inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED'
-                            ? '<span style="color:var(--accent-emerald);"><i class="fa-solid fa-circle-check"></i> Approved</span>'
+                            ? '<span style="color:var(--accent-emerald);"><i class="fa-solid fa-circle-check"></i> Approved &amp; Signed</span>'
                             : inv.status === 'PENDING_VERIFICATION'
-                            ? '<span style="color:var(--accent-amber);"><i class="fa-solid fa-clock"></i> Pending</span>'
+                            ? '<span style="color:var(--accent-amber);"><i class="fa-solid fa-clock"></i> Pending Buyer</span>'
                             : inv.status === 'DISPUTED' || inv.status === 'REJECTED'
                             ? '<span style="color:var(--accent-rose);"><i class="fa-solid fa-triangle-exclamation"></i> Disputed</span>'
-                            : '<span style="color:var(--accent-indigo);"><i class="fa-solid fa-check"></i> Financed</span>'}
+                            : '<span style="color:var(--accent-indigo);"><i class="fa-solid fa-circle-check"></i> Financed / Disbursed</span>'}
                     </div>
                 </div>
                 <div>
@@ -1971,81 +1999,114 @@ function renderFinancierOfferDesk(inv) {
             </div>
         </div>
 
-        <!-- Condition Matching Assessment -->
-        <div class="condition-box ${conditionMatches ? 'matched' : 'exceeded'}">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                ${conditionMatches 
-                    ? '<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);font-size:1.1rem;"></i> <strong>Matches Underwriting Conditions</strong>'
-                    : '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);font-size:1.1rem;"></i> <strong>Exceeds Standard Parameters</strong>'}
-            </div>
-            <p style="margin:0;font-size:0.78rem;color:var(--text-secondary);">
-                ${conditionMatches 
-                    ? `Invoice value ($${inv.amount.toLocaleString()}) fits within your liquidity pool and risk threshold (Score: ${riskScore}% &le; 45%).`
-                    : `Invoice requested ($${inv.amount.toLocaleString()}) or risk score exceeds single-ticket guideline. You can manually adjust the funding amount below to what you can provide.`}
-            </p>
-        </div>
-
-        <!-- Manual Custom Financing Controls -->
-        <div class="form-group">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <label style="margin:0;font-weight:700;">Manual Financing Amount ($)</label>
-                <span style="font-size:0.72rem;color:var(--text-muted);">Max: $${inv.amount.toLocaleString()}</span>
-            </div>
-            <input type="number" id="offer-custom-amount-inp" value="${inv.amount}" min="1000" max="${inv.amount}" step="1000"
-                   class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
-            
-            <div style="display:flex;gap:6px;margin-top:6px;">
-                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(1.0, ${inv.amount})">100% Full</button>
-                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.75, ${inv.amount})">75% Partial</button>
-                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.50, ${inv.amount})">50% Partial</button>
-            </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="form-group">
-                <label>Discount Rate (%)</label>
-                <input type="number" step="0.1" id="offer-discount-inp" value="${defaultDiscount}" class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
-            </div>
-            <div class="form-group">
-                <label>Annualized APR (%)</label>
-                <input type="number" step="0.1" id="offer-apr-inp" value="${recommendedApr}" class="form-control">
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Tenor (Days)</label>
-            <input type="number" id="offer-tenor-inp" value="60" class="form-control">
-        </div>
-
-        <!-- Live Yield & Disbursement Summary -->
-        <div style="background:var(--accent-indigo-light);border:1.5px solid var(--accent-indigo-mid);padding:12px 16px;border-radius:8px;margin-bottom:14px;">
-            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
-                <span style="color:var(--text-secondary);">Funded Capital:</span>
-                <strong id="preview-funded-amount" style="font-family:var(--font-mono);">$${initialFunded.toLocaleString()}</strong>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
-                <span style="color:var(--text-secondary);">Financier Discount Fee Earned:</span>
-                <strong id="preview-discount-revenue" style="color:var(--accent-emerald);font-family:var(--font-mono);">
-                    +$${(initialFunded * (defaultDiscount / 100)).toLocaleString()}
-                </strong>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:0.9rem;padding-top:6px;border-top:1px dashed var(--accent-indigo-mid);">
-                <span style="font-weight:700;color:var(--accent-indigo);">Disbursement to Supplier:</span>
-                <strong id="preview-supplier-payout" style="font-size:1.15rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
-                    $${(initialFunded * (1.0 - defaultDiscount / 100)).toLocaleString()}
-                </strong>
-            </div>
-        </div>
-
-        ${inv.status === 'DISPUTED' || inv.status === 'REJECTED' ? `
-            <div class="info-box" style="background:rgba(239,68,68,0.1);border-color:var(--accent-rose);color:var(--accent-rose);margin-bottom:10px;">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <span>Invoice is disputed by buyer. Financing offers cannot be executed until dispute is resolved.</span>
+        ${isFinancedOrSettled ? `
+            <!-- Accepted Offering & Disbursed Payout Summary View -->
+            <div class="glass-panel mb-12" style="background:var(--accent-emerald-light);border:1.5px solid var(--accent-emerald);padding:14px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--accent-emerald);">
+                    <i class="fa-solid fa-circle-check" style="font-size:1.2rem;"></i>
+                    <strong style="font-size:0.95rem;">ACCEPTED OFFERING — CAPITAL DISBURSED</strong>
+                </div>
+                <p style="margin:0 0 10px 0;font-size:0.78rem;color:var(--text-secondary);">
+                    This invoice financing offer was verified and accepted by the supplier. Funds have been disbursed on-ledger.
+                </p>
+                <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.8rem;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span>Principal Funded Amount:</span>
+                        <strong style="font-family:var(--font-mono);">$${inv.amount.toLocaleString()}</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span>Discount Fee Revenue Earned:</span>
+                        <strong style="color:var(--accent-emerald);font-family:var(--font-mono); font-weight:800;">+$${(inv.amount * 0.022).toLocaleString()} (2.2%)</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span>Supplier Disbursement Account:</span>
+                        <strong>SUPPLIER_BANK_ACC_APEX_8892</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px dashed var(--border);margin-top:4px;">
+                        <span>Ledger Signature:</span>
+                        <strong style="font-family:var(--font-mono);font-size:0.72rem;color:var(--accent-indigo);">
+                            ${inv.document_hash ? inv.document_hash.substring(0, 22) + '…' : 'SHA256:VERIFIED-DISBURSED'}
+                        </strong>
+                    </div>
+                </div>
             </div>
         ` : `
-            <button class="btn btn-primary btn-full" onclick="submitFinancierCustomOffer('${inv.id}')" style="padding:12px;">
-                <i class="fa-solid fa-paper-plane"></i> Extend Custom Financing Offer
-            </button>
+            <!-- Condition Matching Assessment -->
+            <div class="condition-box ${conditionMatches ? 'matched' : 'exceeded'}">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    ${conditionMatches 
+                        ? '<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);font-size:1.1rem;"></i> <strong>Matches Underwriting Conditions</strong>'
+                        : '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);font-size:1.1rem;"></i> <strong>Exceeds Standard Parameters</strong>'}
+                </div>
+                <p style="margin:0;font-size:0.78rem;color:var(--text-secondary);">
+                    ${conditionMatches 
+                        ? `Invoice value ($${inv.amount.toLocaleString()}) fits within your liquidity pool and risk threshold (Score: ${riskScore}% &le; 45%).`
+                        : `Invoice requested ($${inv.amount.toLocaleString()}) or risk score exceeds single-ticket guideline. You can manually adjust the funding amount below to what you can provide.`}
+                </p>
+            </div>
+
+            <!-- Manual Custom Financing Controls -->
+            <div class="form-group">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <label style="margin:0;font-weight:700;">Manual Financing Amount ($)</label>
+                    <span style="font-size:0.72rem;color:var(--text-muted);">Max: $${inv.amount.toLocaleString()}</span>
+                </div>
+                <input type="number" id="offer-custom-amount-inp" value="${inv.amount}" min="1000" max="${inv.amount}" step="1000"
+                       class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
+                
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(1.0, ${inv.amount})">100% Full</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.75, ${inv.amount})">75% Partial</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.50, ${inv.amount})">50% Partial</button>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-group">
+                    <label>Discount Rate (%)</label>
+                    <input type="number" step="0.1" id="offer-discount-inp" value="${defaultDiscount}" class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
+                </div>
+                <div class="form-group">
+                    <label>Annualized APR (%)</label>
+                    <input type="number" step="0.1" id="offer-apr-inp" value="${recommendedApr}" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Tenor (Days)</label>
+                <input type="number" id="offer-tenor-inp" value="60" class="form-control">
+            </div>
+
+            <!-- Live Yield & Disbursement Summary -->
+            <div style="background:var(--accent-indigo-light);border:1.5px solid var(--accent-indigo-mid);padding:12px 16px;border-radius:8px;margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
+                    <span style="color:var(--text-secondary);">Funded Capital:</span>
+                    <strong id="preview-funded-amount" style="font-family:var(--font-mono);">$${initialFunded.toLocaleString()}</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
+                    <span style="color:var(--text-secondary);">Financier Discount Fee Earned:</span>
+                    <strong id="preview-discount-revenue" style="color:var(--accent-emerald);font-family:var(--font-mono);">
+                        +$${(initialFunded * (defaultDiscount / 100)).toLocaleString()}
+                    </strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.9rem;padding-top:6px;border-top:1px dashed var(--accent-indigo-mid);">
+                    <span style="font-weight:700;color:var(--accent-indigo);">Disbursement to Supplier:</span>
+                    <strong id="preview-supplier-payout" style="font-size:1.15rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
+                        $${(initialFunded * (1.0 - defaultDiscount / 100)).toLocaleString()}
+                    </strong>
+                </div>
+            </div>
+
+            ${inv.status === 'DISPUTED' || inv.status === 'REJECTED' ? `
+                <div class="info-box" style="background:rgba(239,68,68,0.1);border-color:var(--accent-rose);color:var(--accent-rose);margin-bottom:10px;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Invoice is disputed by buyer. Financing offers cannot be executed until dispute is resolved.</span>
+                </div>
+            ` : `
+                <button class="btn btn-primary btn-full" onclick="submitFinancierCustomOffer('${inv.id}')" style="padding:12px;">
+                    <i class="fa-solid fa-paper-plane"></i> Extend Custom Financing Offer
+                </button>
+            `}
         `}
     `;
 }
