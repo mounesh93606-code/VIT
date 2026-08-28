@@ -138,6 +138,61 @@ def get_system_stats(db: Session = Depends(get_db)):
         active_liquidity_pool=active_liquidity
     )
 
+@app.get("/api/directory/suppliers", tags=["Directory"])
+def get_directory_suppliers(db: Session = Depends(get_db)):
+    suppliers = db.query(Supplier).all()
+    return [
+        {
+            "id": s.id,
+            "name": s.company_name or "Supplier",
+            "company_name": s.company_name or "Supplier",
+            "tax_id": s.tax_id or "TAX-UNSPECIFIED",
+            "credit_rating": s.credit_rating or "BBB",
+            "risk_score": s.risk_score if s.risk_score is not None else 25.0,
+            "sector": "Industrial & Manufacturing Components",
+            "rating": 4.8
+        }
+        for s in suppliers
+    ]
+
+@app.get("/api/directory/buyers", tags=["Directory"])
+def get_directory_buyers(db: Session = Depends(get_db)):
+    buyers = db.query(Buyer).all()
+    return [
+        {
+            "id": b.id,
+            "name": b.company_name or "Buyer",
+            "company_name": b.company_name or "Buyer",
+            "tax_id": b.tax_id or "TAX-UNSPECIFIED",
+            "credit_rating": b.credit_rating or "AA",
+            "max_credit_limit": b.max_credit_limit or 1000000.0
+        }
+        for b in buyers
+    ]
+
+@app.get("/api/directory/financiers", tags=["Directory"])
+def get_directory_financiers(db: Session = Depends(get_db)):
+    financiers = db.query(Financier).all()
+    res = []
+    for idx, f in enumerate(financiers):
+        is_top = (idx == 0)
+        min_apr = f.min_acceptable_apr or 5.0
+        res.append({
+            "id": f.id,
+            "name": f.institution_name or "Institutional Financier",
+            "institution_name": f.institution_name or "Institutional Financier",
+            "liquidity_pool": f.liquidity_pool or 5000000.0,
+            "min_acceptable_apr": min_apr,
+            "max_risk_tolerance": f.max_risk_tolerance or 40.0,
+            "rate": round(min_apr * 0.28, 1),
+            "apr": min_apr,
+            "speed": "Instant Payout" if is_top else "1-2 Business Days",
+            "type": "Commercial Bank & NBFC",
+            "score": 94 if is_top else max(75, 90 - idx * 5),
+            "aiRec": is_top
+        })
+    return res
+
 # Protected Direct AI Microservice endpoints
 @app.post("/api/ai/invoice-parse", tags=["AI Agents"])
 def parse_invoice_text(
