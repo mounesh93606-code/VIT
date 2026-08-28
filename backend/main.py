@@ -1,9 +1,17 @@
 import os
+import mimetypes
 import sqlalchemy
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
+# Ensure proper MIME type mappings on all OS environments (e.g. Linux Docker/Render)
+mimetypes.init()
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
 
 from backend.config import settings
 from backend.database import get_db, engine, Base
@@ -41,7 +49,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# OWASP Security Headers Middleware
+# OWASP Security Headers & Static Asset MIME Type Middleware
 @app.middleware("http")
 async def add_security_headers_and_limit_size(request: Request, call_next):
     # 1. Payload size limit check (Max 2MB)
@@ -51,17 +59,26 @@ async def add_security_headers_and_limit_size(request: Request, call_next):
 
     response = await call_next(request)
 
-    # 2. OWASP Recommended Security Headers
+    # 2. Enforce strict Content-Type for static files to prevent nosniff block on Linux
+    path = request.url.path.lower()
+    if path.endswith(".css"):
+        response.headers["Content-Type"] = "text/css; charset=utf-8"
+    elif path.endswith(".js"):
+        response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    elif path.endswith(".woff2"):
+        response.headers["Content-Type"] = "font/woff2"
+
+    # 3. OWASP Recommended Security Headers
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; "
+        "default-src 'self' https: data: 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
-        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; "
         "img-src 'self' data: https:;"
     )
 
