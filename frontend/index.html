@@ -232,16 +232,49 @@
             </button>
         </nav>
 
-        <div class="user-profile-badge">
-            <div class="status-indicator online"></div>
-            <span id="active-user-name">Loading…</span>
-            <span class="user-role-tag" id="active-role-tag">ROLE</span>
-            <button class="btn btn-secondary btn-sm" onclick="openModal('modal-register')">
-                <i class="fa-solid fa-user-plus"></i> Register
-            </button>
-            <button class="btn btn-danger btn-sm" onclick="logout()">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </button>
+        <!-- Single User Profile Icon Dropdown Menu -->
+        <div class="user-menu-wrapper">
+            <div class="user-profile-trigger" id="user-profile-trigger" onclick="toggleUserDropdown(event)">
+                <div class="user-avatar-circle" id="nav-user-avatar">U</div>
+                <div style="display:flex;flex-direction:column;text-align:left;line-height:1.2;">
+                    <span id="active-user-name" style="font-size:0.83rem;font-weight:700;">Loading…</span>
+                    <span id="active-role-tag" style="font-size:0.65rem;color:var(--accent-indigo);font-weight:800;letter-spacing:0.5px;">ROLE</span>
+                </div>
+                <i class="fa-solid fa-chevron-down" style="font-size:0.75rem;color:var(--text-muted);margin-left:4px;"></i>
+            </div>
+
+            <!-- Floating Single Dropdown Menu with About, Settings, Register, Logout -->
+            <div id="user-menu-dropdown" class="user-menu-dropdown">
+                <div class="user-menu-header">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div class="user-avatar-circle" id="menu-avatar-large" style="width:38px;height:38px;font-size:1.05rem;">U</div>
+                        <div>
+                            <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);" id="menu-user-name">User Name</div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary);" id="menu-user-email">user@scfnexus.com</div>
+                            <div style="font-size:0.7rem;color:var(--accent-indigo);font-weight:700;margin-top:2px;" id="menu-user-company">Apex Industrial &bull; TAX-001</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="user-menu-items">
+                    <div class="user-menu-item" onclick="openAboutModal()">
+                        <i class="fa-solid fa-circle-info" style="color:var(--accent-indigo);width:18px;"></i>
+                        <span>About SCF Nexus</span>
+                    </div>
+                    <div class="user-menu-item" onclick="openSettingsModal()">
+                        <i class="fa-solid fa-gear" style="color:var(--accent-indigo);width:18px;"></i>
+                        <span>Settings &amp; Preferences</span>
+                    </div>
+                    <div class="user-menu-item" onclick="openModal('modal-register');closeUserDropdown();">
+                        <i class="fa-solid fa-user-plus" style="color:var(--accent-emerald);width:18px;"></i>
+                        <span>Register New Account</span>
+                    </div>
+                    <div class="user-menu-divider"></div>
+                    <div class="user-menu-item logout-item" onclick="logout()">
+                        <i class="fa-solid fa-right-from-bracket" style="color:var(--accent-rose);width:18px;"></i>
+                        <span>Logout &amp; Sign Out</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -1165,6 +1198,87 @@
                 <button type="submit" class="btn btn-primary">Create Account</button>
             </div>
         </form>
+    <!-- Modal: About Platform -->
+<div id="modal-about" class="modal-backdrop">
+    <div class="modal-content" style="max-width:550px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-circle-info" style="color:var(--accent-indigo);"></i> About SCF Nexus Platform</h3>
+            <button class="close-btn" onclick="closeModal('modal-about')">&times;</button>
+        </div>
+        <div style="padding:10px 0;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+                <div class="logo-icon" style="width:48px;height:48px;font-size:1.4rem;"><i class="fa-solid fa-cube"></i></div>
+                <div>
+                    <h4 style="font-size:1.1rem;font-weight:800;margin:0;">SCF NEXUS v2.4.0</h4>
+                    <p style="margin:2px 0 0;font-size:0.8rem;color:var(--text-secondary);">AI-Powered Decentralized Supply Chain Finance Marketplace</p>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                <div class="glass-panel" style="padding:12px;background:var(--bg-card-alt);">
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;">AI Core Engine</span>
+                    <strong style="font-size:0.88rem;color:var(--accent-indigo);"><i class="fa-solid fa-brain"></i> 5 Autonomous Agents</strong>
+                </div>
+                <div class="glass-panel" style="padding:12px;background:var(--bg-card-alt);">
+                    <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Ledger Fingerprint</span>
+                    <strong style="font-size:0.88rem;color:var(--accent-emerald);"><i class="fa-solid fa-shield-halved"></i> SHA-256 Validated</strong>
+                </div>
+            </div>
+
+            <h5 style="font-size:0.88rem;font-weight:700;margin-bottom:8px;">Platform Capability &amp; Role Features:</h5>
+            <ul style="font-size:0.8rem;color:var(--text-secondary);padding-left:18px;line-height:1.6;">
+                <li><strong>Supplier Operations Hub:</strong> Buyer requests, 1-click invoice generation, balance metrics &amp; AI top financier matching.</li>
+                <li><strong>Buyer Procurement Desk:</strong> Supplier directory, purchase orders, 4-point invoice verification &amp; maturity repayment.</li>
+                <li><strong>Financier Desk:</strong> Supplier money requested profile, invoice rate &amp; yield calculator, manual custom funding, and accepted offerings audit.</li>
+                <li><strong>AI Brain &amp; Admin:</strong> Autonomous risk scoring, MILP portfolio allocation optimization &amp; zero-trust audit trail.</li>
+            </ul>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="closeModal('modal-about')">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Settings & Preferences -->
+<div id="modal-settings" class="modal-backdrop">
+    <div class="modal-content" style="max-width:500px;">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-gear" style="color:var(--accent-indigo);"></i> Settings &amp; Preferences</h3>
+            <button class="close-btn" onclick="closeModal('modal-settings')">&times;</button>
+        </div>
+        <div style="padding:10px 0;">
+            <div class="form-group mb-16">
+                <label style="font-weight:700;">Interface Theme Mode</label>
+                <div style="display:flex;gap:10px;margin-top:6px;">
+                    <button type="button" class="btn btn-secondary" id="theme-btn-dark" style="flex:1;" onclick="toggleThemeMode('dark')">
+                        <i class="fa-solid fa-moon"></i> Dark Mode
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="theme-btn-light" style="flex:1;" onclick="toggleThemeMode('light')">
+                        <i class="fa-solid fa-sun"></i> Light Mode
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group mb-16">
+                <label style="font-weight:700;">Live Marketplace Notifications</label>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;font-size:0.83rem;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" checked id="pref-toasts"> Show Toast Notifications for Invoice Approvals &amp; Financing Offers
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <input type="checkbox" checked id="pref-sound"> Audio Alert on Fund Payouts &amp; Buyer Signatures
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="font-weight:700;">Cryptographic Ledger Key</label>
+                <input type="text" readonly value="0x88F29A...SCF_NEXUS_MAINNET_NODE" class="form-control" style="font-family:var(--font-mono);font-size:0.78rem;">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="saveSettings()">Save Preferences</button>
+        </div>
     </div>
 </div>
 

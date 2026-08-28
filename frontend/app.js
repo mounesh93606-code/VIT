@@ -283,11 +283,88 @@ async function loadBuyersDirectory() {
 }
 
 // =====================================================================
+//  SINGLE USER PROFILE ICON DROPDOWN & MENU CONTROLLERS
+// =====================================================================
+function toggleUserDropdown(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById("user-menu-dropdown");
+    if (dropdown) {
+        dropdown.classList.toggle("active");
+    }
+}
+
+function closeUserDropdown() {
+    const dropdown = document.getElementById("user-menu-dropdown");
+    if (dropdown) dropdown.classList.remove("active");
+}
+
+document.addEventListener("click", (e) => {
+    const wrapper = document.querySelector(".user-menu-wrapper");
+    if (wrapper && !wrapper.contains(e.target)) {
+        closeUserDropdown();
+    }
+});
+
+function updateUserMenuInfo() {
+    if (!currentUser) return;
+    const initial = (currentUser.full_name || currentUser.company_name || 'U').charAt(0).toUpperCase();
+
+    const navAvatar = document.getElementById("nav-user-avatar");
+    if (navAvatar) navAvatar.textContent = initial;
+
+    const menuAvatar = document.getElementById("menu-avatar-large");
+    if (menuAvatar) menuAvatar.textContent = initial;
+
+    const activeName = document.getElementById("active-user-name");
+    if (activeName) activeName.textContent = currentUser.full_name || currentUser.company_name;
+
+    const activeRole = document.getElementById("active-role-tag");
+    if (activeRole) activeRole.textContent = (currentRole || currentUser.role || "ROLE").toUpperCase();
+
+    const menuName = document.getElementById("menu-user-name");
+    if (menuName) menuName.textContent = currentUser.full_name || currentUser.company_name;
+
+    const menuEmail = document.getElementById("menu-user-email");
+    if (menuEmail) menuEmail.textContent = currentUser.email || `${currentRole}@scfnexus.com`;
+
+    const menuCompany = document.getElementById("menu-user-company");
+    if (menuCompany) {
+        const comp = currentUser.company_name || "SCF Nexus Account";
+        const tax = currentUser.tax_id || "VERIFIED-ID";
+        menuCompany.innerHTML = `${comp} &bull; <span style="font-family:var(--font-mono);">${tax}</span>`;
+    }
+}
+
+function openAboutModal() {
+    closeUserDropdown();
+    openModal("modal-about");
+}
+
+function openSettingsModal() {
+    closeUserDropdown();
+    openModal("modal-settings");
+}
+
+function toggleThemeMode(mode) {
+    if (mode === "light") {
+        document.body.classList.add("light-mode");
+        showToast("Switched to Clean Light Theme Mode", "info");
+    } else {
+        document.body.classList.remove("light-mode");
+        showToast("Switched to Dark Glassmorphism Theme Mode", "info");
+    }
+}
+
+function saveSettings() {
+    closeModal("modal-settings");
+    showToast("User Preferences & Notification settings saved successfully!", "success");
+}
+
+// =====================================================================
 //  DASHBOARD INIT
 // =====================================================================
 async function initDashboard() {
-    document.getElementById("active-user-name").textContent = currentUser.full_name;
-    document.getElementById("active-role-tag").textContent  = currentRole.toUpperCase();
+    updateUserMenuInfo();
 
     document.querySelectorAll(".role-btn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.role === currentRole);
@@ -311,7 +388,6 @@ async function switchRole(role) {
     const portal = document.getElementById(`portal-${role}`);
     if (portal) portal.classList.add("active-view");
 
-    document.getElementById("active-role-tag").textContent = role.toUpperCase();
     await loginAsRole(role);
 }
 
@@ -328,7 +404,7 @@ async function loginAsRole(role) {
         const data = await res.json();
         authToken   = data.access_token;
         currentUser = data.user;
-        document.getElementById("active-user-name").textContent = currentUser.full_name;
+        updateUserMenuInfo();
         await loadRoleData();
     } catch (err) {
         console.error("Role switch error:", err);
