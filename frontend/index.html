@@ -442,7 +442,7 @@
             <div class="portal-header">
                 <div>
                     <h2><i class="fa-solid fa-building-columns"></i> Financier Liquidity &amp; Risk Desk</h2>
-                    <p class="subtitle">Deploy capital, set risk criteria, review AI-matched opportunities &amp; generate financing offers.</p>
+                    <p class="subtitle">Inspect supplier requests, verify buyer acceptance &amp; disputes, match financing conditions, and extend custom funding amounts.</p>
                 </div>
                 <div class="liquidity-badge-large">
                     <span>Active Pool:</span>
@@ -450,29 +450,102 @@
                 </div>
             </div>
 
+            <!-- Financier Underwriting Criteria Bar -->
+            <div class="glass-panel mb-16" style="padding:14px 20px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon emerald"><i class="fa-solid fa-vault"></i></div>
+                        <div>
+                            <span class="stat-label">Available Liquidity</span>
+                            <span class="stat-value" id="fin-stat-liquidity" style="font-size:1.1rem;font-weight:800;">$10,000,000</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon purple"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div>
+                            <span class="stat-label">Max Risk Tolerance</span>
+                            <span class="stat-value" id="fin-stat-risk" style="font-size:1.1rem;font-weight:800;color:var(--accent-indigo);">Score &le; 45%</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon indigo"><i class="fa-solid fa-percent"></i></div>
+                        <div>
+                            <span class="stat-label">Target Min APR</span>
+                            <span class="stat-value" id="fin-stat-apr" style="font-size:1.1rem;font-weight:800;color:var(--accent-indigo);">5.5%</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <div class="stat-icon amber"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+                        <div>
+                            <span class="stat-label">Market Demand</span>
+                            <span class="stat-value" id="fin-stat-demand" style="font-size:1.1rem;font-weight:800;color:var(--accent-amber);">$0 (0 Invoices)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supplier Filter Strip (Click a specific supplier) -->
+            <div class="glass-panel mb-16" style="padding:14px 20px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <div style="font-size:0.88rem;font-weight:700;display:flex;align-items:center;gap:8px;">
+                        <i class="fa-solid fa-filter" style="color:var(--accent-indigo);"></i> Filter Requests by Supplier:
+                    </div>
+                    <span id="financier-filtered-supplier-tag" class="badge badge-info">Showing All Suppliers</span>
+                </div>
+                <div id="financier-supplier-filter-list" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;">
+                    <!-- Dynamically populated with supplier pills -->
+                </div>
+            </div>
+
+            <!-- Status Tabs: All, Buyer Accepted/Verified, Awaiting Approval, Disputed/Rejected, Financed -->
+            <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+                <button class="filter-tab-btn active" id="fin-tab-all" onclick="setFinancierStatusFilter('ALL')">
+                    <i class="fa-solid fa-list"></i> All Invoices (<span id="fin-count-all">0</span>)
+                </button>
+                <button class="filter-tab-btn" id="fin-tab-verified" onclick="setFinancierStatusFilter('VERIFIED')">
+                    <i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);"></i> Buyer Accepted (<span id="fin-count-verified">0</span>)
+                </button>
+                <button class="filter-tab-btn" id="fin-tab-pending" onclick="setFinancierStatusFilter('PENDING')">
+                    <i class="fa-solid fa-clock" style="color:var(--accent-amber);"></i> Awaiting Approval (<span id="fin-count-pending">0</span>)
+                </button>
+                <button class="filter-tab-btn" id="fin-tab-disputed" onclick="setFinancierStatusFilter('DISPUTED')">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-rose);"></i> Rejected / Disputed (<span id="fin-count-disputed">0</span>)
+                </button>
+                <button class="filter-tab-btn" id="fin-tab-financed" onclick="setFinancierStatusFilter('FINANCED')">
+                    <i class="fa-solid fa-money-bill-wave" style="color:var(--accent-indigo);"></i> Financed / Settled (<span id="fin-count-financed">0</span>)
+                </button>
+            </div>
+
+            <!-- Selected Supplier Info Card (if filtered to a supplier) -->
+            <div id="financier-selected-supplier-profile" style="display:none;" class="mb-16">
+                <!-- Dynamically populated -->
+            </div>
+
             <div class="grid-2-cols">
-                <!-- AI Matched Feed -->
+                <!-- Supplier Financing Requests / Invoices List -->
                 <div class="glass-panel">
                     <div class="panel-header">
-                        <h3><i class="fa-solid fa-bullseye"></i> AI-Matched Investment Opportunities</h3>
+                        <h3><i class="fa-solid fa-hand-holding-dollar"></i> Supplier Financing Requests</h3>
+                        <span class="badge" id="financier-requests-count">0 Invoices</span>
                     </div>
-                    <div id="financier-matched-feed" class="invoice-cards-container">
+                    <div id="financier-matched-feed" class="invoice-cards-container" style="max-height:600px;overflow-y:auto;">
                         <div class="empty-state">
                             <i class="fa-solid fa-chart-bar fa-2x"></i>
-                            <p>No verified invoices matching your risk criteria available.</p>
+                            <p>No supplier invoices match the current filter.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Offer Calculator -->
+                <!-- Condition Matching & Manual Offer Calculator -->
                 <div class="glass-panel">
                     <div class="panel-header">
-                        <h3><i class="fa-solid fa-calculator"></i> Dynamic Rate &amp; APR Calculator</h3>
+                        <h3><i class="fa-solid fa-calculator"></i> Finance Condition &amp; Offer Desk</h3>
+                        <span class="badge badge-ai"><i class="fa-solid fa-sliders"></i> Manual Override Enabled</span>
                     </div>
                     <div id="financier-offer-calculator">
                         <div class="empty-state">
                             <i class="fa-solid fa-hand-holding-dollar fa-2x"></i>
-                            <p>Select an opportunity from the feed to configure financing terms.</p>
+                            <p>Select an invoice from the requests feed on the left to review condition match and configure financing terms.</p>
                         </div>
                     </div>
                 </div>

@@ -133,9 +133,10 @@ def get_invoices(
         else:
             return []
     elif current_user.role == "financier":
-        query = query.filter(Invoice.status.in_(["VERIFIED", "OFFER_EXTENDED", "FINANCED", "SETTLED"]))
+        if status_filter:
+            query = query.filter(Invoice.status == status_filter)
 
-    if status_filter:
+    elif status_filter:
         query = query.filter(Invoice.status == status_filter)
 
     invoices = query.order_by(Invoice.created_at.desc()).all()

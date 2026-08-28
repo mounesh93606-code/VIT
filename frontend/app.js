@@ -1114,121 +1114,467 @@ async function simulateSettlement(invoiceId, amount) {
 }
 
 // =====================================================================
-//  FINANCIER PORTAL
+//  FINANCIER PORTAL LOGIC
 // =====================================================================
+let financierStatusFilter   = "ALL";
+let financierSupplierFilter = null;
+let financierInvoicesCache  = [];
+let financierSelectedInv    = null;
+let financierProfileState   = {
+    liquidity_pool: 10000000.0,
+    max_risk_tolerance: 45.0,
+    min_acceptable_apr: 5.5
+};
+
 async function loadFinancierMatchedFeed() {
     try {
-        const res = await fetch(`${API_BASE}/matching/invoices/default`, {
+        await loadSuppliersDirectory();
+
+        // 1. Fetch all market invoices for financier inspection
+        const res = await fetch(`${API_BASE}/invoices`, {
             headers: { Authorization: `Bearer ${authToken}` }
         });
-        const matches = await res.json();
-        const feed = document.getElementById("financier-matched-feed");
-
-        if (!matches.length) {
-            feed.innerHTML = `<div class="empty-state"><i class="fa-solid fa-chart-bar fa-2x"></i><p>No verified invoices matching your risk criteria.</p></div>`;
-            return;
+        if (res.ok) {
+            financierInvoicesCache = await res.json();
+        } else {
+            financierInvoicesCache = [];
         }
 
-        feed.innerHTML = matches.map(m => `
-            <div class="invoice-card"
-                 onclick="selectFinancierItem('${m.invoice.id}', ${m.invoice.amount}, ${m.calculated_risk_score}, ${m.recommended_apr})">
-                <div class="inv-card-header">
-                    <span class="inv-num">${m.invoice.invoice_number}</span>
-                    <span class="badge badge-ai">Match: ${m.match_score}%</span>
-                </div>
-                <div class="inv-card-body">
-                    <div>
-                        <div class="inv-amount">$${m.invoice.amount.toLocaleString()}</div>
-                        <div class="inv-meta">Risk: <strong>${m.calculated_risk_score}% LOW</strong></div>
-                    </div>
-                    <div class="inv-meta text-right">
-                        <div>APR: <strong>${m.recommended_apr}%</strong></div>
-                        <small class="text-success">Eligible <i class="fa-solid fa-circle-check"></i></small>
-                    </div>
-                </div>
-                <div class="score-bar-wrap mt-8">
-                    <div class="score-bar-fill green" style="width:${m.match_score}%;"></div>
-                </div>
-            </div>
-        `).join("");
+        // 2. Compute market metrics
+        const totalDemandVolume = financierInvoicesCache.reduce((sum, i) => sum + (i.amount || 0), 0);
+        const countAll = financierInvoicesCache.length;
+        const countVerified = financierInvoicesCache.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED").length;
+        const countPending = financierInvoicesCache.filter(i => i.status === "PENDING_VERIFICATION").length;
+        const countDisputed = financierInvoicesCache.filter(i => i.status === "DISPUTED" || i.status === "REJECTED").length;
+        const countFinanced = financierInvoicesCache.filter(i => i.status === "FINANCED" || i.status === "SETTLED").length;
 
-        if (matches.length) {
-            const f = matches[0];
-            selectFinancierItem(f.invoice.id, f.invoice.amount, f.calculated_risk_score, f.recommended_apr);
-        }
+        // 3. Update Criteria Bar stats
+        const demandEl = document.getElementById("fin-stat-demand");
+        if (demandEl) demandEl.textContent = `$${totalDemandVolume.toLocaleString()} (${countAll} Req${countAll === 1 ? '' : 's'})`;
+
+        const countAllEl = document.getElementById("fin-count-all");
+        if (countAllEl) countAllEl.textContent = countAll;
+        const countVerEl = document.getElementById("fin-count-verified");
+        if (countVerEl) countVerEl.textContent = countVerified;
+        const countPenEl = document.getElementById("fin-count-pending");
+        if (countPenEl) countPenEl.textContent = countPending;
+        const countDisEl = document.getElementById("fin-count-disputed");
+        if (countDisEl) countDisEl.textContent = countDisputed;
+        const countFinEl = document.getElementById("fin-count-financed");
+        if (countFinEl) countFinEl.textContent = countFinanced;
+
+        // 4. Render Supplier Filter Pills
+        renderFinancierSupplierFilterPills();
+
+        // 5. Render Invoices Feed
+        renderFinancierInvoicesFeed();
+
     } catch (err) {
-        console.error("Financier feed error:", err);
+        console.error("Financier feed loading error:", err);
     }
 }
 
-function selectFinancierItem(invId, amount, riskScore, recommendedApr) {
+function renderFinancierSupplierFilterPills() {
+    const container = document.getElementById("financier-supplier-filter-list");
+    if (!container) return;
+
+    // Collect all suppliers from directory or who have invoices
+    const map = new Map();
+    suppliersList.forEach(s => {
+        map.set(s.id, { id: s.id, name: s.name || s.company_name, count: 0, rating: s.credit_rating || 'BBB', risk: s.risk_score || 25.0 });
+    });
+
+    financierInvoicesCache.forEach(inv => {
+        const sId = inv.supplier_id || inv.supplier_company_name;
+        if (sId && map.has(sId)) {
+            map.get(sId).count += 1;
+        } else if (inv.supplier_company_name) {
+            map.set(inv.supplier_company_name, { id: inv.supplier_company_name, name: inv.supplier_company_name, count: 1, rating: 'BBB', risk: 25.0 });
+        }
+    });
+
+    const isAllActive = !financierSupplierFilter;
+    let html = `
+        <button class="supplier-filter-pill ${isAllActive ? 'active' : ''}" onclick="setFinancierSupplierFilter(null)">
+            <i class="fa-solid fa-layer-group"></i> All Suppliers <span class="pill-count">${financierInvoicesCache.length}</span>
+        </button>
+    `;
+
+    map.forEach(sup => {
+        const isActive = financierSupplierFilter === sup.id || financierSupplierFilter === sup.name;
+        html += `
+            <button class="supplier-filter-pill ${isActive ? 'active' : ''}" onclick="setFinancierSupplierFilter('${sup.id}')">
+                <span style="font-weight:700;">${(sup.name || 'S').charAt(0).toUpperCase()}</span>
+                <span>${sup.name}</span>
+                <span class="pill-count">${sup.count}</span>
+            </button>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function setFinancierStatusFilter(status) {
+    financierStatusFilter = status;
+    document.querySelectorAll(".filter-tab-btn").forEach(btn => btn.classList.remove("active"));
+    const activeTab = document.getElementById(`fin-tab-${status.toLowerCase()}`);
+    if (activeTab) activeTab.classList.add("active");
+    renderFinancierInvoicesFeed();
+}
+
+function setFinancierSupplierFilter(supId) {
+    financierSupplierFilter = supId;
+    renderFinancierSupplierFilterPills();
+    renderFinancierSelectedSupplierProfile();
+    renderFinancierInvoicesFeed();
+}
+
+function renderFinancierSelectedSupplierProfile() {
+    const box = document.getElementById("financier-selected-supplier-profile");
+    const tag = document.getElementById("financier-filtered-supplier-tag");
+    if (!box) return;
+
+    if (!financierSupplierFilter) {
+        box.style.display = "none";
+        if (tag) tag.textContent = "Showing All Suppliers";
+        return;
+    }
+
+    const sup = suppliersList.find(s => s.id === financierSupplierFilter || s.name === financierSupplierFilter || s.company_name === financierSupplierFilter)
+        || { name: financierSupplierFilter, company_name: financierSupplierFilter, credit_rating: "BBB", risk_score: 25.0, tax_id: "TAX-SUPPLIER" };
+
+    const supInvoices = financierInvoicesCache.filter(i => 
+        i.supplier_id === sup.id || i.supplier_company_name === sup.name || i.supplier_company_name === sup.company_name
+    );
+    const supTotalVol = supInvoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+
+    if (tag) tag.textContent = `Filtered: ${sup.name || sup.company_name}`;
+
+    box.style.display = "block";
+    box.innerHTML = `
+        <div class="glass-panel" style="border-left:4px solid var(--accent-indigo);padding:14px 18px;background:var(--accent-indigo-light);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="supplier-avatar" style="width:48px;height:48px;font-size:1.2rem;">
+                        ${(sup.name || sup.company_name || 'S').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem;font-weight:700;margin:0;">${sup.name || sup.company_name}</h3>
+                        <p style="margin:2px 0 0;font-size:0.78rem;color:var(--text-secondary);">
+                            Tax ID: <strong>${sup.tax_id || 'VERIFIED'}</strong> &bull; Sector: ${sup.sector || 'Manufacturing & Components'}
+                        </p>
+                    </div>
+                </div>
+                <div style="display:flex;gap:16px;align-items:center;">
+                    <div style="text-align:right;">
+                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Credit Rating</span>
+                        <strong style="color:var(--accent-indigo);font-size:0.95rem;">${sup.credit_rating || 'BBB'}</strong>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Risk Profile</span>
+                        <strong style="color:var(--accent-emerald);font-size:0.95rem;">${sup.risk_score || 22.5}% LOW</strong>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:0.7rem;color:var(--text-muted);display:block;">Supplier Requests</span>
+                        <strong style="font-size:0.95rem;">$${supTotalVol.toLocaleString()} (${supInvoices.length})</strong>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="setFinancierSupplierFilter(null)">
+                        <i class="fa-solid fa-xmark"></i> Clear Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderFinancierInvoicesFeed() {
+    const feed = document.getElementById("financier-matched-feed");
+    const countBadge = document.getElementById("financier-requests-count");
+    if (!feed) return;
+
+    let filtered = financierInvoicesCache;
+
+    // Apply Supplier Filter
+    if (financierSupplierFilter) {
+        filtered = filtered.filter(i => 
+            i.supplier_id === financierSupplierFilter ||
+            i.supplier_company_name === financierSupplierFilter ||
+            (suppliersList.find(s => s.id === financierSupplierFilter)?.company_name === i.supplier_company_name)
+        );
+    }
+
+    // Apply Status Filter
+    if (financierStatusFilter === "VERIFIED") {
+        filtered = filtered.filter(i => i.status === "VERIFIED" || i.status === "OFFER_EXTENDED");
+    } else if (financierStatusFilter === "PENDING") {
+        filtered = filtered.filter(i => i.status === "PENDING_VERIFICATION");
+    } else if (financierStatusFilter === "DISPUTED") {
+        filtered = filtered.filter(i => i.status === "DISPUTED" || i.status === "REJECTED");
+    } else if (financierStatusFilter === "FINANCED") {
+        filtered = filtered.filter(i => i.status === "FINANCED" || i.status === "SETTLED");
+    }
+
+    if (countBadge) {
+        countBadge.textContent = `${filtered.length} Invoice${filtered.length === 1 ? '' : 's'}`;
+    }
+
+    if (filtered.length === 0) {
+        feed.innerHTML = `
+            <div class="empty-state">
+                <i class="fa-solid fa-inbox fa-2x"></i>
+                <p>No invoices match the selected filter criteria.</p>
+            </div>
+        `;
+        return;
+    }
+
+    feed.innerHTML = filtered.map(inv => {
+        const isSelected = financierSelectedInv && financierSelectedInv.id === inv.id;
+        const riskScore = inv.risk_score || (inv.amount > 200000 ? 18.5 : 24.0);
+        const fitsRisk = riskScore <= financierProfileState.max_risk_tolerance;
+        const fitsLiquidity = inv.amount <= financierProfileState.liquidity_pool;
+        const conditionMatches = fitsRisk && fitsLiquidity;
+
+        let statusPillHtml = '';
+        if (inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED') {
+            statusPillHtml = `<span class="status-pill verified"><i class="fa-solid fa-circle-check"></i> Buyer Accepted</span>`;
+        } else if (inv.status === 'PENDING_VERIFICATION') {
+            statusPillHtml = `<span class="status-pill pending"><i class="fa-solid fa-clock"></i> Awaiting Buyer Approval</span>`;
+        } else if (inv.status === 'DISPUTED' || inv.status === 'REJECTED') {
+            statusPillHtml = `<span class="status-pill disputed"><i class="fa-solid fa-triangle-exclamation"></i> Buyer Disputed / Rejected</span>`;
+        } else {
+            statusPillHtml = `<span class="status-pill financed"><i class="fa-solid fa-money-bill-wave"></i> Financed</span>`;
+        }
+
+        return `
+            <div class="invoice-card ${isSelected ? 'selected' : ''}"
+                 onclick="selectFinancierInvoice('${inv.id}')"
+                 style="margin-bottom:10px;padding:12px 14px;">
+                <div class="inv-card-header" style="margin-bottom:8px;">
+                    <span class="inv-num" style="font-weight:700;">${inv.invoice_number}</span>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        ${conditionMatches 
+                            ? '<span class="condition-badge matched"><i class="fa-solid fa-circle-check"></i> Fits Criteria</span>' 
+                            : '<span class="condition-badge exceeded"><i class="fa-solid fa-sliders"></i> Exceeds Limits</span>'}
+                        ${statusPillHtml}
+                    </div>
+                </div>
+                <div class="inv-card-body">
+                    <div>
+                        <div class="inv-amount" style="font-size:1.15rem;font-weight:800;color:var(--text-primary);">$${(inv.amount || 0).toLocaleString()}</div>
+                        <div class="inv-meta" style="margin-top:2px;">
+                            Supplier: <strong>${inv.supplier_company_name || 'Apex Industrial'}</strong> &bull; Buyer: <strong>${inv.buyer_company_name || 'Global Retailers'}</strong>
+                        </div>
+                    </div>
+                    <div class="inv-meta text-right">
+                        <div>Due: <strong>${inv.due_date || 'Net 60'}</strong></div>
+                        <small class="text-muted">Risk Score: <strong>${riskScore}%</strong></small>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    if (filtered.length > 0 && !financierSelectedInv) {
+        selectFinancierInvoice(filtered[0].id);
+    }
+}
+
+function selectFinancierInvoice(invId) {
+    const inv = financierInvoicesCache.find(i => i.id === invId);
+    if (!inv) return;
+    financierSelectedInv = inv;
+    renderFinancierInvoicesFeed();
+    renderFinancierOfferDesk(inv);
+}
+
+function renderFinancierOfferDesk(inv) {
     const calc = document.getElementById("financier-offer-calculator");
+    if (!calc) return;
+
+    const riskScore = inv.risk_score || (inv.amount > 200000 ? 18.5 : 24.0);
+    const recommendedApr = (5.0 + (riskScore * 0.12)).toFixed(1);
+    const fitsRisk = riskScore <= financierProfileState.max_risk_tolerance;
+    const fitsLiquidity = inv.amount <= financierProfileState.liquidity_pool;
+    const conditionMatches = fitsRisk && fitsLiquidity;
+
+    const defaultDiscount = 2.2;
+    const initialFunded = inv.amount;
+
     calc.innerHTML = `
-        <div class="evidence-box mb-12">
-            <h4 style="margin-bottom:8px;">Generate Custom Financing Offer</h4>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-top:8px;">
+        <div class="evidence-box mb-12" style="background:var(--bg-card);border:1px solid var(--border);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <div>
-                    <div style="font-size:0.72rem;color:var(--text-secondary);">Invoice Value</div>
-                    <div style="font-weight:800;font-family:var(--font-mono);color:var(--text-primary);">$${amount.toLocaleString()}</div>
+                    <h4 style="margin:0 0 2px 0;font-size:0.98rem;font-weight:700;">
+                        Invoice ${inv.invoice_number}
+                    </h4>
+                    <span style="font-size:0.78rem;color:var(--text-secondary);">
+                        Supplier: <strong>${inv.supplier_company_name || 'Supplier'}</strong> &rarr; Buyer: <strong>${inv.buyer_company_name || 'Buyer'}</strong>
+                    </span>
+                </div>
+                <div class="inv-amount" style="font-size:1.2rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
+                    $${(inv.amount || 0).toLocaleString()}
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+                <div>
+                    <div style="font-size:0.7rem;color:var(--text-secondary);">Buyer Acceptance</div>
+                    <div style="font-weight:700;font-size:0.8rem;margin-top:2px;">
+                        ${inv.status === 'VERIFIED' || inv.status === 'OFFER_EXTENDED'
+                            ? '<span style="color:var(--accent-emerald);"><i class="fa-solid fa-circle-check"></i> Approved</span>'
+                            : inv.status === 'PENDING_VERIFICATION'
+                            ? '<span style="color:var(--accent-amber);"><i class="fa-solid fa-clock"></i> Pending</span>'
+                            : inv.status === 'DISPUTED' || inv.status === 'REJECTED'
+                            ? '<span style="color:var(--accent-rose);"><i class="fa-solid fa-triangle-exclamation"></i> Disputed</span>'
+                            : '<span style="color:var(--accent-indigo);"><i class="fa-solid fa-check"></i> Financed</span>'}
+                    </div>
                 </div>
                 <div>
-                    <div style="font-size:0.72rem;color:var(--text-secondary);">AI Risk Score</div>
-                    <div style="font-weight:800;font-family:var(--font-mono);color:var(--accent-emerald);">${riskScore}%</div>
+                    <div style="font-size:0.7rem;color:var(--text-secondary);">AI Risk Score</div>
+                    <div style="font-weight:800;font-family:var(--font-mono);color:var(--accent-emerald);margin-top:2px;">${riskScore}% LOW</div>
                 </div>
                 <div>
-                    <div style="font-size:0.72rem;color:var(--text-secondary);">Base APR</div>
-                    <div style="font-weight:800;font-family:var(--font-mono);color:var(--accent-indigo);">${recommendedApr}%</div>
+                    <div style="font-size:0.7rem;color:var(--text-secondary);">AI Target APR</div>
+                    <div style="font-weight:800;font-family:var(--font-mono);color:var(--accent-indigo);margin-top:2px;">${recommendedApr}%</div>
                 </div>
             </div>
         </div>
 
-        <div class="form-group">
-            <label>Discount Rate (%)</label>
-            <input type="number" step="0.1" id="offer-discount-inp" value="2.5" class="form-control" oninput="updateOfferedPreview(${amount})">
+        <!-- Condition Matching Assessment -->
+        <div class="condition-box ${conditionMatches ? 'matched' : 'exceeded'}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                ${conditionMatches 
+                    ? '<i class="fa-solid fa-circle-check" style="color:var(--accent-emerald);font-size:1.1rem;"></i> <strong>Matches Underwriting Conditions</strong>'
+                    : '<i class="fa-solid fa-triangle-exclamation" style="color:var(--accent-amber);font-size:1.1rem;"></i> <strong>Exceeds Standard Parameters</strong>'}
+            </div>
+            <p style="margin:0;font-size:0.78rem;color:var(--text-secondary);">
+                ${conditionMatches 
+                    ? `Invoice value ($${inv.amount.toLocaleString()}) fits within your liquidity pool and risk threshold (Score: ${riskScore}% &le; 45%).`
+                    : `Invoice requested ($${inv.amount.toLocaleString()}) or risk score exceeds single-ticket guideline. You can manually adjust the funding amount below to what you can provide.`}
+            </p>
         </div>
+
+        <!-- Manual Custom Financing Controls -->
         <div class="form-group">
-            <label>APR (%)</label>
-            <input type="number" step="0.1" id="offer-apr-inp" value="${recommendedApr}" class="form-control">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label style="margin:0;font-weight:700;">Manual Financing Amount ($)</label>
+                <span style="font-size:0.72rem;color:var(--text-muted);">Max: $${inv.amount.toLocaleString()}</span>
+            </div>
+            <input type="number" id="offer-custom-amount-inp" value="${inv.amount}" min="1000" max="${inv.amount}" step="1000"
+                   class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
+            
+            <div style="display:flex;gap:6px;margin-top:6px;">
+                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(1.0, ${inv.amount})">100% Full</button>
+                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.75, ${inv.amount})">75% Partial</button>
+                <button type="button" class="btn btn-secondary btn-sm" style="flex:1;padding:4px 6px;font-size:0.72rem;" onclick="setCustomAmountPreset(0.50, ${inv.amount})">50% Partial</button>
+            </div>
         </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+                <label>Discount Rate (%)</label>
+                <input type="number" step="0.1" id="offer-discount-inp" value="${defaultDiscount}" class="form-control" oninput="updateCustomOfferedPreview(${inv.amount})">
+            </div>
+            <div class="form-group">
+                <label>Annualized APR (%)</label>
+                <input type="number" step="0.1" id="offer-apr-inp" value="${recommendedApr}" class="form-control">
+            </div>
+        </div>
+
         <div class="form-group">
             <label>Tenor (Days)</label>
             <input type="number" id="offer-tenor-inp" value="60" class="form-control">
         </div>
 
-        <div style="background:var(--accent-indigo-light);border:1px solid var(--accent-indigo-mid);padding:12px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:0.83rem;color:var(--accent-indigo);">Projected Disbursement:</span>
-            <strong id="preview-offered-amount" style="font-size:1.2rem;color:var(--accent-indigo);font-family:var(--font-mono);">
-                $${(amount * 0.975).toLocaleString()}
-            </strong>
+        <!-- Live Yield & Disbursement Summary -->
+        <div style="background:var(--accent-indigo-light);border:1.5px solid var(--accent-indigo-mid);padding:12px 16px;border-radius:8px;margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
+                <span style="color:var(--text-secondary);">Funded Capital:</span>
+                <strong id="preview-funded-amount" style="font-family:var(--font-mono);">$${initialFunded.toLocaleString()}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:6px;">
+                <span style="color:var(--text-secondary);">Financier Discount Fee Earned:</span>
+                <strong id="preview-discount-revenue" style="color:var(--accent-emerald);font-family:var(--font-mono);">
+                    +$${(initialFunded * (defaultDiscount / 100)).toLocaleString()}
+                </strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.9rem;padding-top:6px;border-top:1px dashed var(--accent-indigo-mid);">
+                <span style="font-weight:700;color:var(--accent-indigo);">Disbursement to Supplier:</span>
+                <strong id="preview-supplier-payout" style="font-size:1.15rem;font-weight:800;color:var(--accent-indigo);font-family:var(--font-mono);">
+                    $${(initialFunded * (1.0 - defaultDiscount / 100)).toLocaleString()}
+                </strong>
+            </div>
         </div>
 
-        <button class="btn btn-primary btn-full" onclick="submitFinancierOffer('${invId}')">
-            <i class="fa-solid fa-paper-plane"></i> Extend Financing Offer
-        </button>
+        ${inv.status === 'DISPUTED' || inv.status === 'REJECTED' ? `
+            <div class="info-box" style="background:rgba(239,68,68,0.1);border-color:var(--accent-rose);color:var(--accent-rose);margin-bottom:10px;">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>Invoice is disputed by buyer. Financing offers cannot be executed until dispute is resolved.</span>
+            </div>
+        ` : `
+            <button class="btn btn-primary btn-full" onclick="submitFinancierCustomOffer('${inv.id}')" style="padding:12px;">
+                <i class="fa-solid fa-paper-plane"></i> Extend Custom Financing Offer
+            </button>
+        `}
     `;
 }
 
-function updateOfferedPreview(amount) {
-    const disc = parseFloat(document.getElementById("offer-discount-inp").value) || 0;
-    const preview = amount * (1.0 - disc / 100.0);
-    const el = document.getElementById("preview-offered-amount");
-    if (el) el.textContent = `$${preview.toLocaleString()}`;
+function setCustomAmountPreset(ratio, total) {
+    const inp = document.getElementById("offer-custom-amount-inp");
+    if (!inp) return;
+    inp.value = Math.round(total * ratio);
+    updateCustomOfferedPreview(total);
 }
 
-async function submitFinancierOffer(invId) {
-    const discount = parseFloat(document.getElementById("offer-discount-inp").value);
-    const apr      = parseFloat(document.getElementById("offer-apr-inp").value);
-    const tenor    = parseInt(document.getElementById("offer-tenor-inp").value);
+function updateCustomOfferedPreview(baseTotal) {
+    const customAmtInp = document.getElementById("offer-custom-amount-inp");
+    const discInp = document.getElementById("offer-discount-inp");
+    if (!customAmtInp || !discInp) return;
+
+    const amount = parseFloat(customAmtInp.value) || baseTotal;
+    const disc = parseFloat(discInp.value) || 0;
+
+    const fee = amount * (disc / 100.0);
+    const payout = amount - fee;
+
+    const elFunded = document.getElementById("preview-funded-amount");
+    const elFee = document.getElementById("preview-discount-revenue");
+    const elPayout = document.getElementById("preview-supplier-payout");
+
+    if (elFunded) elFunded.textContent = `$${amount.toLocaleString()}`;
+    if (elFee) elFee.textContent = `+$${fee.toLocaleString()}`;
+    if (elPayout) elPayout.textContent = `$${payout.toLocaleString()}`;
+}
+
+async function submitFinancierCustomOffer(invId) {
+    const customAmt = parseFloat(document.getElementById("offer-custom-amount-inp")?.value);
+    const discount  = parseFloat(document.getElementById("offer-discount-inp")?.value);
+    const apr       = parseFloat(document.getElementById("offer-apr-inp")?.value);
+    const tenor     = parseInt(document.getElementById("offer-tenor-inp")?.value);
 
     try {
         const res = await fetch(`${API_BASE}/offers/generate`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-            body: JSON.stringify({ invoice_id: invId, discount_rate_pct: discount, apr_pct: apr, tenor_days: tenor, expires_in_hours: 72 })
+            body: JSON.stringify({
+                invoice_id: invId,
+                custom_offered_amount: customAmt,
+                discount_rate_pct: discount,
+                apr_pct: apr,
+                tenor_days: tenor,
+                expires_in_hours: 72
+            })
         });
-        if (!res.ok) throw new Error("Failed to submit offer");
-        showToast("Financing Offer Extended to Supplier!", "success");
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Failed to submit financing offer");
+        }
+
+        showToast(`Financing offer extended! Amount: $${customAmt.toLocaleString()} at ${discount}% discount.`, "success");
         await loadFinancierMatchedFeed();
+        await refreshStats();
     } catch (err) {
         showToast(`Offer error: ${err.message}`, "error");
     }

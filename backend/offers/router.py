@@ -30,13 +30,14 @@ def generate_offer(
 
     financier_id = financier.id if financier else db.query(Financier).first().id
 
-    offered_amt = round(invoice.amount * (1.0 - (offer_in.discount_rate_pct / 100.0)), 2)
+    base_amount = offer_in.custom_offered_amount if (offer_in.custom_offered_amount and offer_in.custom_offered_amount > 0) else invoice.amount
+    offered_amt = round(base_amount * (1.0 - (offer_in.discount_rate_pct / 100.0)), 2)
     expires_at = datetime.utcnow() + timedelta(hours=offer_in.expires_in_hours)
 
     offer = Offer(
         invoice_id=invoice.id,
         financier_id=financier_id,
-        requested_amount=invoice.amount,
+        requested_amount=base_amount,
         offered_amount=offered_amt,
         discount_rate_pct=offer_in.discount_rate_pct,
         apr_pct=offer_in.apr_pct,

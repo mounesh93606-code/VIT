@@ -173,6 +173,7 @@ class OfferCreate(BaseModel):
     discount_rate_pct: float
     apr_pct: float
     tenor_days: int
+    custom_offered_amount: Optional[float] = None
     expires_in_hours: int = 72
 
 class OfferResponse(BaseModel):
