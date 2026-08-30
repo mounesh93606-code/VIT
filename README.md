@@ -455,9 +455,11 @@ The application can be adapted for cloud platforms such as Render or other Docke
 Add screenshots of your application here:
 
 ```markdown
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](
+<img width="957" height="599" alt="Screenshot 2026-08-30 112207" src="https://github.com/user-attachments/assets/f06145eb-e84d-40a2-b123-62c832299e17" />
+)
 
-![Invoice Management](screenshots/invoices.png)
+![Invoice Management](<img width="959" height="599" alt="Screenshot 2026-08-30 112442" src="https://github.com/user-attachments/assets/4fd343ff-8e15-420d-9c27-3e346b62889c" />)
 
 ![Risk Analysis](screenshots/risk-analysis.png)
 ```
